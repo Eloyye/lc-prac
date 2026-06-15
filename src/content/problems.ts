@@ -1,5 +1,7 @@
 import type { Problem } from "../types";
 
+// TODO: REMOVE HARDCODE problems in later milestones
+
 export const PROBLEMS: Problem[] = [
   {
     id: "two-sum",
