@@ -5,9 +5,9 @@ solution on the right; mistakes are flagged but never block; complete it to see
 your speed and accuracy. See [docs/PRD.md](docs/PRD.md) and
 [docs/TECH_SPEC.md](docs/TECH_SPEC.md).
 
-**Status:** Phase 0 — walking skeleton. One hard-coded Python problem, Copy mode,
-split-view editor, char-by-char feedback, auto-indent, live HUD, results, and
-local persistence. IntelliSense (pyright) lands in Phase 1.
+**Status:** Phase 1 in progress. A curated Python problem set with browse/filter
+and custom import; Copy-mode typing with char-by-char feedback, auto-indent, live
+HUD, results, and local persistence. IntelliSense (pyright) is the next step.
 
 ## Quickstart
 
@@ -41,8 +41,8 @@ pnpm dev       # http://localhost:5173
 src/
   typing-engine/   pure logic (diff, metrics, indent) + unit tests
   editor/          Monaco setup, decorations, typing + reference editors
-  store/           Zustand session state
-  content/         bundled problems
-  persistence/     localStorage wrapper
-  ui/              SessionView, Hud, Results
+  store/           Zustand session + library state
+  content/         bundled problems + filtering
+  persistence/     localStorage wrapper (attempts, best scores, custom problems)
+  ui/              Library, ProblemCard, ImportDialog, SessionView, Hud, Results
 ```

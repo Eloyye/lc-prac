@@ -11,9 +11,10 @@ import { Results } from "./Results";
 interface SessionViewProps {
   problem: Problem;
   solution: Solution;
+  onExit: () => void;
 }
 
-export function SessionView({ problem, solution }: SessionViewProps) {
+export function SessionView({ problem, solution, onExit }: SessionViewProps) {
   const [attemptKey, setAttemptKey] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [savedBest, setSavedBest] = useState<number | null>(null);
@@ -26,6 +27,11 @@ export function SessionView({ problem, solution }: SessionViewProps) {
   const errorKeystrokes = useSession((s) => s.errorKeystrokes);
   const correctChars = useSession((s) => s.correctChars);
   const reset = useSession((s) => s.reset);
+
+  // Clear any state from a previous problem when this view mounts.
+  useEffect(() => {
+    reset();
+  }, [reset]);
 
   useEffect(() => {
     if (status !== "running") return;
@@ -79,15 +85,25 @@ export function SessionView({ problem, solution }: SessionViewProps) {
     setAttemptKey((k) => k + 1);
   };
 
+  const exit = (): void => {
+    reset();
+    onExit();
+  };
+
   return (
     <div className="flex h-screen flex-col bg-neutral-950 text-neutral-100">
       <header className="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
-        <div className="flex items-baseline gap-3">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={exit}
+            className="rounded px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-white"
+          >
+            ← Library
+          </button>
           <span className="font-semibold">CodeType</span>
           <span className="text-sm text-neutral-400">{problem.title}</span>
-          <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-xs uppercase text-neutral-400">
-            {problem.difficulty}
-          </span>
+          <span className="text-xs text-neutral-500">{solution.approach}</span>
         </div>
         <Hud metrics={metrics} elapsedMs={elapsedMs} />
       </header>
@@ -117,6 +133,7 @@ export function SessionView({ problem, solution }: SessionViewProps) {
             bestCpm={savedBest}
             isNewBest={isNewBest}
             onRetry={handleRetry}
+            onExit={exit}
           />
         )}
       </main>

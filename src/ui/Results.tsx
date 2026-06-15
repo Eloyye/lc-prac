@@ -6,9 +6,17 @@ interface ResultsProps {
   bestCpm: number | null;
   isNewBest: boolean;
   onRetry: () => void;
+  onExit: () => void;
 }
 
-export function Results({ metrics, durationMs, bestCpm, isNewBest, onRetry }: ResultsProps) {
+export function Results({
+  metrics,
+  durationMs,
+  bestCpm,
+  isNewBest,
+  onRetry,
+  onExit,
+}: ResultsProps) {
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="w-80 rounded-xl border border-neutral-700 bg-neutral-900 p-6 text-center shadow-xl">
@@ -24,13 +32,22 @@ export function Results({ metrics, durationMs, bestCpm, isNewBest, onRetry }: Re
         {bestCpm !== null && (
           <p className="mb-4 text-xs text-neutral-500">Best CPM: {Math.round(bestCpm)}</p>
         )}
-        <button
-          type="button"
-          onClick={onRetry}
-          className="w-full rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-        >
-          Retry
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onExit}
+            className="flex-1 rounded-lg border border-neutral-700 py-2 text-sm font-medium text-neutral-300 hover:bg-neutral-800"
+          >
+            Library
+          </button>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="flex-1 rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     </div>
   );
