@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+/* Typing feedback (Monaco inlineClassName targets). Correct characters keep
+   their syntax-highlight color; only mistakes are flagged — color plus an
+   underline so the signal is not color-only (a11y). */
+.tok-incorrect {
+  color: #f87171 !important;
+  text-decoration: underline;
+  text-decoration-color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
