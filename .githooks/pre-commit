@@ -1,0 +1,13 @@
+#!/bin/sh
+# Pre-commit quality gate: type check, lint, and format check.
+# Tests run in CI (see .github/workflows/ci.yml), not here, to keep commits fast.
+set -e
+
+echo "▶ typecheck"
+pnpm typecheck
+
+echo "▶ lint"
+pnpm lint
+
+echo "▶ format check"
+pnpm format:check
