@@ -3,5 +3,9 @@
   "env": {
     "browser": true,
     "es2024": true
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error"
   }
 }
