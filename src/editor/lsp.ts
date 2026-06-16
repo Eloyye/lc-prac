@@ -24,10 +24,15 @@ import type {
   MarkedString,
 } from "vscode-languageserver-protocol/browser";
 
+const LSP_PATH = "/lsp";
+const MARKER_OWNER = "pyright";
+const PYTHON_LANGUAGE = "python";
+const WORKSPACE_URI = "file:///";
+
 // pyright runs as a real Node language server attached to the Vite dev server
 // at `/lsp` (see the pyright-lsp plugin in vite.config.ts), so it shares the
 // app's origin and port. Built into `pnpm dev`.
-const LSP_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/lsp`;
+const LSP_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${LSP_PATH}`;
 
 type Documentation = string | MarkupContent | undefined;
 
@@ -132,20 +137,15 @@ function toMonacoSignatureHelp(result: SignatureHelp): monaco.languages.Signatur
   };
 }
 
-interface OpenDoc {
-  version: number;
-  changeSub: monaco.IDisposable;
-}
-
-const openDocs = new Map<string, OpenDoc>();
+const syncedDocuments = new Set<string>();
 let connectionPromise: Promise<ProtocolConnection> | null = null;
 let providersRegistered = false;
 
 function initializeParams(): InitializeParams {
   return {
     processId: null,
-    rootUri: "file:///",
-    workspaceFolders: [{ uri: "file:///", name: "workspace" }],
+    rootUri: WORKSPACE_URI,
+    workspaceFolders: [{ uri: WORKSPACE_URI, name: "workspace" }],
     initializationOptions: {},
     capabilities: {
       textDocument: {
@@ -163,9 +163,9 @@ function initializeParams(): InitializeParams {
 }
 
 function handleDiagnostics(params: PublishDiagnosticsParams): void {
-  const model = monaco.editor.getModels().find((m) => m.uri.toString() === params.uri);
-  if (model !== undefined) {
-    monaco.editor.setModelMarkers(model, "pyright", params.diagnostics.map(toMarker));
+  const model = monaco.editor.getModel(monaco.Uri.parse(params.uri));
+  if (model !== null) {
+    monaco.editor.setModelMarkers(model, MARKER_OWNER, params.diagnostics.map(toMarker));
   }
 }
 
@@ -177,11 +177,11 @@ function registerProviders(connection: ProtocolConnection): void {
   if (providersRegistered) return;
   providersRegistered = true;
 
-  monaco.languages.registerCompletionItemProvider("python", {
+  monaco.languages.registerCompletionItemProvider(PYTHON_LANGUAGE, {
     triggerCharacters: ["."],
     async provideCompletionItems(model, position) {
       const uri = model.uri.toString();
-      if (!openDocs.has(uri)) return { suggestions: [] };
+      if (!syncedDocuments.has(uri)) return { suggestions: [] };
       try {
         const result = await connection.sendRequest(CompletionRequest.type, {
           textDocument: { uri },
@@ -202,10 +202,10 @@ function registerProviders(connection: ProtocolConnection): void {
     },
   });
 
-  monaco.languages.registerHoverProvider("python", {
+  monaco.languages.registerHoverProvider(PYTHON_LANGUAGE, {
     async provideHover(model, position) {
       const uri = model.uri.toString();
-      if (!openDocs.has(uri)) return null;
+      if (!syncedDocuments.has(uri)) return null;
       try {
         const result = await connection.sendRequest(HoverRequest.type, {
           textDocument: { uri },
@@ -219,11 +219,11 @@ function registerProviders(connection: ProtocolConnection): void {
     },
   });
 
-  monaco.languages.registerSignatureHelpProvider("python", {
+  monaco.languages.registerSignatureHelpProvider(PYTHON_LANGUAGE, {
     signatureHelpTriggerCharacters: ["(", ","],
     async provideSignatureHelp(model, position) {
       const uri = model.uri.toString();
-      if (!openDocs.has(uri)) return null;
+      if (!syncedDocuments.has(uri)) return null;
       try {
         const result = await connection.sendRequest(SignatureHelpRequest.type, {
           textDocument: { uri },
@@ -244,7 +244,7 @@ async function init(): Promise<ProtocolConnection> {
     webSocket.addEventListener("open", () => resolve(), { once: true });
     webSocket.addEventListener(
       "error",
-      () => reject(new Error(`pyright LSP unreachable at ${LSP_URL} — is \`pnpm lsp\` running?`)),
+      () => reject(new Error(`pyright LSP unreachable at ${LSP_URL} - is \`pnpm dev\` running?`)),
       { once: true },
     );
   });
@@ -267,7 +267,7 @@ async function init(): Promise<ProtocolConnection> {
   connection.listen();
 
   await connection.sendRequest(InitializeRequest.type, initializeParams());
-  connection.sendNotification(InitializedNotification.type, {});
+  await connection.sendNotification(InitializedNotification.type, {});
 
   registerProviders(connection);
   return connection;
@@ -283,42 +283,65 @@ function ensureConnection(): Promise<ProtocolConnection> {
   return connectionPromise;
 }
 
+function clearDiagnostics(uri: monaco.Uri): void {
+  const model = monaco.editor.getModel(uri);
+  if (model !== null) {
+    monaco.editor.setModelMarkers(model, MARKER_OWNER, []);
+  }
+}
+
 /** Begin pyright analysis for a model and keep its content synced. */
-export function openDocument(model: monaco.editor.ITextModel): void {
+export function syncDocument(model: monaco.editor.ITextModel): monaco.IDisposable {
+  const uri = model.uri.toString();
+  let changeSub: monaco.IDisposable | undefined;
+  let connection: ProtocolConnection | undefined;
+  let opened = false;
+  let disposed = false;
+
+  const closeServerDocument = (): void => {
+    if (connection === undefined || !opened) return;
+    opened = false;
+    void connection
+      .sendNotification(DidCloseTextDocumentNotification.type, { textDocument: { uri } })
+      .catch(() => {});
+  };
+
   void ensureConnection()
-    .then((connection) => {
-      if (model.isDisposed()) return;
-      const uri = model.uri.toString();
+    .then(async (readyConnection) => {
+      if (disposed || model.isDisposed()) return;
+      connection = readyConnection;
       let version = 1;
-      connection.sendNotification(DidOpenTextDocumentNotification.type, {
-        textDocument: { uri, languageId: "python", version, text: model.getValue() },
+      await connection.sendNotification(DidOpenTextDocumentNotification.type, {
+        textDocument: { uri, languageId: PYTHON_LANGUAGE, version, text: model.getValue() },
       });
-      const changeSub = model.onDidChangeContent(() => {
+      opened = true;
+      if (disposed || model.isDisposed()) {
+        closeServerDocument();
+        return;
+      }
+      changeSub = model.onDidChangeContent(() => {
         version += 1;
-        connection.sendNotification(DidChangeTextDocumentNotification.type, {
-          textDocument: { uri, version },
-          contentChanges: [{ text: model.getValue() }],
-        });
+        void connection
+          ?.sendNotification(DidChangeTextDocumentNotification.type, {
+            textDocument: { uri, version },
+            contentChanges: [{ text: model.getValue() }],
+          })
+          .catch(() => {});
       });
-      openDocs.set(uri, { version, changeSub });
+      syncedDocuments.add(uri);
     })
     .catch(() => {
       // pyright unavailable — typing still works without IntelliSense.
     });
-}
 
-/** Stop analysis for a model and clear its markers. */
-export function closeDocument(uri: monaco.Uri): void {
-  const key = uri.toString();
-  const doc = openDocs.get(key);
-  if (doc === undefined) return;
-  doc.changeSub.dispose();
-  openDocs.delete(key);
-  void ensureConnection()
-    .then((connection) => {
-      connection.sendNotification(DidCloseTextDocumentNotification.type, {
-        textDocument: { uri: key },
-      });
-    })
-    .catch(() => {});
+  return {
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      changeSub?.dispose();
+      syncedDocuments.delete(uri);
+      clearDiagnostics(model.uri);
+      closeServerDocument();
+    },
+  };
 }

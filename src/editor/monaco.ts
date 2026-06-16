@@ -10,4 +10,18 @@ const environment: monaco.Environment = {
 (globalThis as typeof globalThis & { MonacoEnvironment: monaco.Environment }).MonacoEnvironment =
   environment;
 
+export const baseEditorOptions = {
+  theme: "vs-dark",
+  automaticLayout: true,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  fontSize: 14,
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  contextmenu: false,
+  renderLineHighlight: "none",
+  occurrencesHighlight: "off",
+  selectionHighlight: false,
+  folding: false,
+} satisfies monaco.editor.IStandaloneEditorConstructionOptions;
+
 export { monaco };

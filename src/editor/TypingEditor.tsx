@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
-import { monaco } from "./monaco";
+import { baseEditorOptions, monaco } from "./monaco";
 import { correctCharCount, diffStatuses, expectedIndent, isComplete } from "../typing-engine";
 import { toRuns } from "./decorations";
-import { closeDocument, openDocument } from "./lsp";
+import { syncDocument } from "./lsp";
 import { useSession } from "../store/session";
 
 interface TypingEditorProps {
@@ -35,13 +35,8 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
     );
 
     const editor = monaco.editor.create(container, {
+      ...baseEditorOptions,
       model,
-      theme: "vs-dark",
-      automaticLayout: true,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      fontSize: 14,
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
       cursorSmoothCaretAnimation: "on",
       // IntelliSense (completion / hover / signature help) is live, but
       // Enter stays a plain newline so it never accepts a suggestion — that
@@ -59,9 +54,6 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
       tabCompletion: "off",
       formatOnType: false,
       formatOnPaste: false,
-      contextmenu: false,
-      renderLineHighlight: "none",
-      folding: false,
     });
 
     const { start, registerKeystroke, setCorrectChars, finish } = useSession.getState();
@@ -121,14 +113,14 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
 
     const change = model.onDidChangeContent(update);
 
-    openDocument(model);
+    const lspDocument = syncDocument(model);
     editor.focus();
     update();
 
     return () => {
       keyDown.dispose();
       change.dispose();
-      closeDocument(model.uri);
+      lspDocument.dispose();
       editor.dispose();
       model.dispose();
     };

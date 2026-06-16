@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { monaco } from "./monaco";
+import { baseEditorOptions, monaco } from "./monaco";
 
 interface ReferenceEditorProps {
   code: string;
@@ -14,19 +14,11 @@ export function ReferenceEditor({ code }: ReferenceEditorProps) {
     if (container === null) return;
 
     const editor = monaco.editor.create(container, {
+      ...baseEditorOptions,
       value: code,
       language: "python",
-      theme: "vs-dark",
       readOnly: true,
       domReadOnly: true,
-      automaticLayout: true,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      fontSize: 14,
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-      contextmenu: false,
-      renderLineHighlight: "none",
-      folding: false,
     });
 
     return () => editor.dispose();
