@@ -7,15 +7,15 @@
 
 ## 1. Scope & approach
 
-- v1 is a **client-only SPA** — no backend, all state local (PRD §10, §15).
-- Stack: **Vite + React + TS + Tailwind + Monaco**, with **pyright** in a Web Worker for IntelliSense.
+- v1 is a React SPA + a **small Node LSP backend** (pyright over WebSocket); all app/user state stays local (PRD §10, §15).
+- Stack: **Vite + React + TS + Tailwind + Monaco**, with **real pyright (node) bridged over WebSocket** for IntelliSense.
 - Canonical source for architecture, data models, FR/NFR, and engineering tradeoffs.
 
 ---
 
 ## 2. Architecture
 
-Client-only. Pure typing logic is isolated from the editor so it can be unit-tested without a DOM.
+Client SPA plus a small Node LSP backend (pyright over WebSocket). Pure typing logic is isolated from the editor so it can be unit-tested without a DOM.
 
 ```
 Browser (SPA)
@@ -27,7 +27,7 @@ Browser (SPA)
 ├─ Store (Zustand): session · problem · settings
 ├─ ProblemRepository: bundled JSON ∪ localStorage(custom)
 ├─ Persistence: localStorage (attempts · best · custom · settings)
-└─ LSP: monaco-languageclient ◄─JSON-RPC─► Web Worker (pyright)
+└─ LSP client (src/editor/lsp.ts) ◄─JSON-RPC/WebSocket(/lsp)─► Vite plugin → pyright-langserver (node)
 ```
 
 **Session data flow:** select problem → load `target` into engine + panes → keystroke → Monaco change event → engine diff → update decorations + HUD → on exact match → Results → persist attempt/PB.
@@ -36,16 +36,16 @@ Browser (SPA)
 
 ## 3. Tech stack
 
-| Layer       | Choice                                 | Why                                 |
-| ----------- | -------------------------------------- | ----------------------------------- |
-| SPA/build   | Vite + React + TS                      | fast HMR, standard                  |
-| Styling     | Tailwind                               | quick, themeable                    |
-| Editor      | Monaco                                 | built-in IntelliSense UI + IDE feel |
-| LSP engine  | pyright browser build, Web Worker      | real IntelliSense, no backend       |
-| LSP bridge  | monaco-languageclient + vscode-jsonrpc | trodden path                        |
-| State       | Zustand                                | minimal boilerplate                 |
-| Persistence | localStorage (v1)                      | simplest, offline                   |
-| Tests       | Vitest + Playwright                    | unit engine, e2e flow               |
+| Layer       | Choice                                                      | Why                                 |
+| ----------- | ----------------------------------------------------------- | ----------------------------------- |
+| SPA/build   | Vite + React + TS                                           | fast HMR, standard                  |
+| Styling     | Tailwind                                                    | quick, themeable                    |
+| Editor      | Monaco                                                      | built-in IntelliSense UI + IDE feel |
+| LSP engine  | real pyright (node, `pyright` pkg)                          | full analysis, no browser limits    |
+| LSP bridge  | `ws` + `vscode-ws-jsonrpc`; hand-written Monaco↔LSP adapter | keeps plain monaco-editor           |
+| State       | Zustand                                                     | minimal boilerplate                 |
+| Persistence | localStorage (v1)                                           | simplest, offline                   |
+| Tests       | Vitest + Playwright                                         | unit engine, e2e flow               |
 
 ---
 
@@ -59,7 +59,7 @@ Browser (SPA)
 | `content/`       | bundled problems + `ProblemRepository` (merge bundled ∪ custom)    |
 | `persistence/`   | typed localStorage wrapper + schema versioning/migration           |
 | `ui/`            | SessionView, HUD, Results, ProblemList, ImportDialog               |
-| `workers/`       | pyright worker entry                                               |
+| `vite.config.ts` | Vite plugin hosting the pyright LSP over WebSocket at `/lsp`       |
 
 ---
 
@@ -93,8 +93,7 @@ function reduce(s: EngineState, e: EngineEvent): EngineState; // pure
 - **Decorations** via `createDecorationsCollection`; recompute only the changed region per change (NFR-1).
 - **Caret**: built-in `cursorSmoothCaretAnimation`, gated on `prefers-reduced-motion`.
 - **Color-blind safety**: errors = red **+ underline**, never hue alone (NFR-7).
-- **IntelliSense (FR-8)**: monaco-languageclient binds the input model to the pyright worker; loaded **async/lazy** so typing works before the LSP is ready.
-- **Vite packaging**: set `MonacoEnvironment.getWorker` for Monaco's workers; pyright is a separate worker entry. ⚠ Highest-risk setup — prototype first (§12).
+- **IntelliSense (FR-8)**: a hand-written adapter (`src/editor/lsp.ts`) maps Monaco completion/hover/signature providers to a pyright LSP connection over WebSocket (a Vite plugin in `vite.config.ts` serves `/lsp` and spawns `pyright-langserver --stdio`). Connects lazily and degrades gracefully when the LSP is unreachable. Diagnostics handler is wired but pyright isn't publishing yet (config follow-up).
 
 ---
 
@@ -202,7 +201,7 @@ One typed wrapper; versioned migrations on load. ~5 MB cap → move `attempts` t
 | ----- | --------------------------------------------------------------------------------------- |
 | NFR-1 | Keystroke→paint ≤ 1 frame (~16 ms) typical, ≤ 50 ms worst case                          |
 | NFR-2 | Interactive ≤ 2 s on broadband; pyright loads async (typing usable before LSP ready)    |
-| NFR-3 | Code-split; lazy-load pyright worker (Monaco + pyright are large — accepted)            |
+| NFR-3 | Code-split; Monaco is large (accepted); pyright runs server-side, off the client bundle |
 | NFR-4 | Current desktop Chrome / Edge / Firefox / Safari; no mobile                             |
 | NFR-5 | Fully functional offline after first load; PWA optional                                 |
 | NFR-6 | Privacy: 100% local, no telemetry in v1                                                 |
@@ -215,22 +214,22 @@ One typed wrapper; versioned migrations on load. ~5 MB cap → move `attempts` t
 
 Engineering decisions (product decisions in PRD §15).
 
-| Decision                               | Rationale                                 | Tradeoff                                        |
-| -------------------------------------- | ----------------------------------------- | ----------------------------------------------- |
-| Client-only for v1                     | simplest, free hosting, offline           | no sync/leaderboards; storage-capped            |
-| Monaco editor                          | IntelliSense UI + IDE feel out of the box | heavy bundle; typing UX hand-built              |
-| pyright in a worker                    | real IntelliSense, $0 infra               | large worker; packaging risk; single-file scope |
-| Positional diff + free edit, paste off | deterministic, simple model               | must handle mid-text edits; no paste            |
-| Allow-through errors                   | Monkeytype parity, simpler input handling | track error map separately from state           |
-| Auto-indent insertion                  | Python usability                          | complicates keystroke accounting                |
-| localStorage in v1                     | trivial, offline                          | ~5 MB cap → IndexedDB later                     |
-| Zustand                                | low boilerplate                           | less structure (fine at this size)              |
+| Decision                                  | Rationale                                 | Tradeoff                              |
+| ----------------------------------------- | ----------------------------------------- | ------------------------------------- |
+| App state client-only (LSP backend aside) | simple, offline, free static hosting      | no sync/leaderboards; storage-capped  |
+| Monaco editor                             | IntelliSense UI + IDE feel out of the box | heavy bundle; typing UX hand-built    |
+| pyright on a Node WebSocket backend       | full, reliable analysis                   | dev-only; built into `pnpm dev`       |
+| Positional diff + free edit, paste off    | deterministic, simple model               | must handle mid-text edits; no paste  |
+| Allow-through errors                      | Monkeytype parity, simpler input handling | track error map separately from state |
+| Auto-indent insertion                     | Python usability                          | complicates keystroke accounting      |
+| localStorage in v1                        | trivial, offline                          | ~5 MB cap → IndexedDB later           |
+| Zustand                                   | low boilerplate                           | less structure (fine at this size)    |
 
 ---
 
 ## 12. Risks
 
-- ⚠ **Monaco + pyright Vite worker packaging** — biggest unknown; prototype in week 1 before committing.
+- **pyright not publishing diagnostics** over the bridge — open config item (completion + hover work).
 - **Bundle size / cold load** — mitigate via lazy LSP + code-splitting.
 - **Per-keystroke decoration cost** on large solutions — mitigate with incremental (changed-region) diff.
 - **pyright browser-build upkeep** — track API drift on upgrades.
@@ -247,7 +246,7 @@ src/
   content/problems/ # bundled JSON/TS
   persistence/
   ui/
-  workers/          # pyright worker entry
+# pyright LSP is a Vite plugin (vite.config.ts) — no separate dir
 docs/  PRD.md  TECH_SPEC.md
 ```
 

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { monaco } from "./monaco";
 import { correctCharCount, diffStatuses, expectedIndent, isComplete } from "../typing-engine";
 import { toRuns } from "./decorations";
+import { closeDocument, openDocument } from "./lsp";
 import { useSession } from "../store/session";
 
 interface TypingEditorProps {
@@ -9,10 +10,13 @@ interface TypingEditorProps {
   onComplete: () => void;
 }
 
+let docCounter = 0;
+
 /**
  * Editable pane where the user retypes the target. Mistakes are flagged but
  * not blocked; completion requires an exact match. Leading indentation is
- * inserted automatically on Enter so it never needs to be typed.
+ * inserted automatically on Enter so it never needs to be typed. The model is
+ * backed by a file:// URI so pyright (see ./lsp) analyzes it for IntelliSense.
  */
 export function TypingEditor({ target, onComplete }: TypingEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -23,9 +27,15 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
     const container = containerRef.current;
     if (container === null) return;
 
+    docCounter += 1;
+    const model = monaco.editor.createModel(
+      "",
+      "python",
+      monaco.Uri.file(`/practice-${docCounter}.py`),
+    );
+
     const editor = monaco.editor.create(container, {
-      value: "",
-      language: "python",
+      model,
       theme: "vs-dark",
       automaticLayout: true,
       minimap: { enabled: false },
@@ -33,29 +43,26 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
       fontSize: 14,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
       cursorSmoothCaretAnimation: "on",
-      // Phase 0 is a "dumb" editor — IntelliSense and auto-edits arrive in
-      // Phase 1. Disable everything that would fight the typing test.
+      // IntelliSense (completion / hover / signature help) is live, but
+      // Enter stays a plain newline so it never accepts a suggestion — that
+      // keeps the auto-indent handler below unambiguous. Bracket auto-closing
+      // stays off so it can't fight the exact target text.
+      acceptSuggestionOnEnter: "off",
+      quickSuggestions: { other: true, comments: false, strings: false },
+      suggestOnTriggerCharacters: true,
+      parameterHints: { enabled: true },
+      wordBasedSuggestions: "off",
       autoIndent: "none",
       autoClosingBrackets: "never",
       autoClosingQuotes: "never",
       autoSurround: "never",
       tabCompletion: "off",
-      quickSuggestions: false,
-      suggestOnTriggerCharacters: false,
-      wordBasedSuggestions: "off",
-      parameterHints: { enabled: false },
       formatOnType: false,
       formatOnPaste: false,
       contextmenu: false,
       renderLineHighlight: "none",
       folding: false,
     });
-
-    const model = editor.getModel();
-    if (model === null) {
-      editor.dispose();
-      return;
-    }
 
     const { start, registerKeystroke, setCorrectChars, finish } = useSession.getState();
     const decorations = editor.createDecorationsCollection();
@@ -114,13 +121,16 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
 
     const change = model.onDidChangeContent(update);
 
+    openDocument(model);
     editor.focus();
     update();
 
     return () => {
       keyDown.dispose();
       change.dispose();
+      closeDocument(model.uri);
       editor.dispose();
+      model.dispose();
     };
   }, [target]);
 

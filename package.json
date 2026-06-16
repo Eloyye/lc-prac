@@ -20,6 +20,8 @@
     "monaco-editor": "^0.55.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "vscode-languageserver-protocol": "^3.18.0",
+    "vscode-ws-jsonrpc": "^3.5.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
@@ -30,14 +32,17 @@
     "@types/node": "^25.9.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.2",
     "babel-plugin-react-compiler": "^1.0.0",
     "oxfmt": "^0.54.0",
     "oxlint": "^1.69.0",
+    "pyright": "^1.1.410",
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "ws": "^8.21.0"
   },
   "engines": {
     "node": ">=20"

@@ -37,7 +37,7 @@ The differentiator vs. a generic code-typing test is the **memorization** angle 
 - Not a content platform: no community-submitted problems, no comments, no social feed in MVP.
 - Not multi-language at launch: **Python only** for v1.
 - Not mobile-first: desktop web only (it's a keyboard app).
-- Not a backend/hosted language server, and no code execution/sandbox — IntelliSense runs client-side via **pyright in a web worker** (§10).
+- No code execution/sandbox in v1. IntelliSense uses **real pyright over WebSocket**, served by the Vite dev server (built into `pnpm dev`); the app is otherwise static with local state (§10).
 
 ---
 
@@ -203,7 +203,7 @@ Track and surface:
 
 - **Frontend:** Vite + React + TypeScript, Tailwind CSS.
 - **Editor:** **Monaco** (decided — IntelliSense live in all modes; see §5.2).
-- **Code intelligence:** **pyright** as the Python language server — runnable **in a web worker (no backend)** or behind a backend WebSocket.
+- **Code intelligence:** **real pyright** (`pyright` npm pkg, node) over a **WebSocket bridge** (`ws` + `vscode-ws-jsonrpc`), hosted by a Vite plugin at `/lsp` (see `vite.config.ts`).
 - **State:** Zustand (or plain React state) for MVP.
 - **Content:** problems as JSON/TS modules bundled in the repo (no backend).
 - **Stats:** `localStorage` for MVP; IndexedDB if data grows.
@@ -238,7 +238,7 @@ This is the larger build task, but well-trodden — typing tests on Monaco exist
 2. **Hosted language server over WebSocket.** Run pyright / `jedi-language-server` / `pylsp` on a backend and bridge LSP-over-WS to the editor. More powerful for heavy/multi-file scenarios but adds infra, per-session processes, and cost.
 3. **Stopgap completion (no server, P1 quick win).** Keyword completion + identifiers harvested from the target solution + snippets. _Not_ real IntelliSense (no types/hover/diagnostics), but cheap and surprisingly relevant since the target is known — fine to ship first while you wire up pyright.
 
-> For your case (personal project, Python-only), **pyright-in-a-web-worker** gives real IntelliSense without running any backend — the sweet spot.
+> **Built: option 2 (WebSocket backend).** The in-browser worker (option 1) was abandoned — `@typefox/pyright-browser`'s nested background-analysis worker never returned results in-browser. Real node pyright over the WS bridge gives working completion + hover; diagnostics are an open config item.
 
 ### Optional later: code execution
 
@@ -299,7 +299,7 @@ type SrsState = {               // spaced repetition, v1/v2
 Single hard-coded Python problem, split view, char-by-char matching, auto-indent, live HUD, results screen, local stats. Proves the core feel.
 
 **Phase 1 — Real product (P0 + select P1)**
-Curated problem set + browse/filter, multiple solutions, **IntelliSense (pyright in a web worker)**, themes, stats dashboard, **user-imported solutions**.
+Curated problem set + browse/filter, multiple solutions, **IntelliSense (pyright over WebSocket)**, themes, stats dashboard, **user-imported solutions**.
 
 **Phase 2 — Memorization (P1)**
 Recall + cloze modes, spaced repetition, "due today" queue, streaks.
@@ -322,7 +322,7 @@ Accounts + sync, leaderboards, more languages, hosted language server (if ever n
 **Decided**
 
 - ✅ **Editor: Monaco** — gives built-in IntelliSense UI; typing-test mechanics built on top via decorations (§10).
-- ✅ **IntelliSense: always on, every mode**, powered by **pyright** running in a web worker (no backend).
+- ✅ **IntelliSense: always on, every mode**, powered by **real pyright on a Node WebSocket backend** (revises the original "no backend" stance; the in-browser worker path was abandoned). Completion + hover verified; diagnostics WIP.
 - ✅ **Lead with Copy mode** for v1 — Recall/SRS (memorization) is the fast-follow, not the launch focus.
 - ✅ **Content: both curated _and_ user-imported** at launch.
 - ✅ **Error behavior: allow typing through mistakes** (Monkeytype default) — errors are marked against accuracy, not blocked; optional block mode deferred.
