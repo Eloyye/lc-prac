@@ -37,21 +37,21 @@ One live practice run of a single Solution — the transient state from first ke
 _Avoid_: run, game
 
 **Mode**:
-How a Session reveals the Reference: **Copy** (always visible), **Recall** (progressively hidden, for memorization), **Free** (hidden; solve it yourself — stretch).
+How a Session reveals the Reference. **Copy** — Reference always fully visible — is the only Mode implemented today; the code currently hardcodes every Attempt to it. **Recall** (progressively hidden, for memorization) and **Free** (hidden; solve it yourself) are planned but unbuilt, like spaced repetition and Cloze.
 _Avoid_: practice type; for Free, "Solve"
 
 **Attempt**:
-The saved record of one completed Session — its mode, cpm, wpm, accuracy, duration, timestamp, and the Problem/Solution it covered. The unit of history.
+The saved record of one _completed_ Session — its mode, cpm, wpm, accuracy, duration, timestamp, and the Problem/Solution it covered. An immutable historical fact: it captures the Reference as it was when typed, so editing or deleting that Solution later never rewrites or re-points it. The unit of history; an abandoned Session records nothing.
 _Avoid_: result, score
 
 **Personal Best (PB)**:
-The best cpm for a given Problem + Solution, derived from Attempts (type `BestScore`).
+The best cpm for a given Problem + Solution **in a given Mode**, derived from Attempts. Copy and Recall PBs are tracked separately and are never compared.
 _Avoid_: high score, record
 
 ### Typing & scoring
 
 **Keystroke**:
-One typed character, judged correct or incorrect by position against the Reference; mistakes are marked, not blocked.
+One typed character, judged correct or incorrect by position against the Reference. Mistakes are marked, not blocked — but you must fix them to complete the Session (you cannot finish with red on screen).
 _Avoid_: input, char event
 
 **CPM**:
@@ -62,7 +62,8 @@ _Avoid_: speed
 Words per minute at 5 chars = 1 word; secondary, kept for Monkeytype comparability.
 
 **Accuracy**:
-Correct keystrokes ÷ total keystrokes, as a percentage (`accuracyPct`).
+Correct keystrokes ÷ total keystrokes, as a percentage (`accuracyPct`) — process-based, so every mis-key counts against it permanently, even after you correct the character.
+_Avoid_: character accuracy (the final-state ratio; not what we report)
 
 **Auto-indent**:
 The editor pre-inserts each line's leading whitespace so the user types only meaningful characters, never Python indentation.
