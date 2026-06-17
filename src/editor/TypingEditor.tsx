@@ -1,6 +1,12 @@
 import { useEffect, useRef } from "react";
 import { baseEditorOptions, monaco } from "./monaco";
-import { correctCharCount, diffStatuses, expectedIndent, isComplete } from "../typing-engine";
+import {
+  correctCharCount,
+  diffStatuses,
+  enterIndent,
+  isComplete,
+  leadingWhitespace,
+} from "../typing-engine";
 import { toRuns } from "./decorations";
 import { syncDocument } from "./lsp";
 import { useSession } from "../store/session";
@@ -40,15 +46,20 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
       cursorSmoothCaretAnimation: "on",
       // IntelliSense (completion / hover / signature help) is live, but
       // Enter stays a plain newline so it never accepts a suggestion — that
-      // keeps the auto-indent handler below unambiguous. Bracket auto-closing
-      // stays off so it can't fight the exact target text.
+      // keeps the auto-indent handler below unambiguous.
       acceptSuggestionOnEnter: "off",
       quickSuggestions: { other: true, comments: false, strings: false },
       suggestOnTriggerCharacters: true,
       parameterHints: { enabled: true },
       wordBasedSuggestions: "off",
       autoIndent: "none",
-      autoClosingBrackets: "never",
+      // Typing ( [ or { inserts the matching close and leaves the cursor
+      // sandwiched between the pair. Over-typing stays on its default
+      // ("auto"), so typing the closing bracket when one was auto-inserted
+      // skips past it instead of doubling — an exact match stays reachable.
+      // Quotes/surround stay off: quotes live inside strings and comments and
+      // would fight the exact target text.
+      autoClosingBrackets: "always",
       autoClosingQuotes: "never",
       autoSurround: "never",
       tabCompletion: "off",
@@ -80,6 +91,12 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
       }
     };
 
+    // One indentation step, honoring the model's tab settings (4 spaces here).
+    const indentUnit = (): string => {
+      const { insertSpaces, indentSize } = model.getOptions();
+      return insertSpaces ? " ".repeat(indentSize) : "\t";
+    };
+
     const keyDown = editor.onKeyDown((e) => {
       // Paste is disabled — this is a typing trainer.
       if ((e.ctrlKey || e.metaKey) && e.keyCode === monaco.KeyCode.KeyV) {
@@ -96,8 +113,16 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
         e.stopPropagation();
         const position = editor.getPosition();
         if (position === null) return;
-        // The new line's 0-based index equals the current 1-based line number.
-        const indent = expectedIndent(target, position.lineNumber);
+        // VSCode-style auto-indent: the new line inherits the indentation of
+        // the line being left (and steps in one level after a block header),
+        // based on the user's own code rather than the reference's layout.
+        const linePrefix = model.getValueInRange({
+          startLineNumber: position.lineNumber,
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
+        });
+        const indent = enterIndent(linePrefix, indentUnit());
         start();
         editor.trigger("keyboard", "type", { text: `\n${indent}` });
         return;
@@ -110,6 +135,33 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
         registerKeystroke(key === target[offset]);
       }
     });
+
+    // "Start new line" (Cmd/Ctrl+Enter) and "start previous line"
+    // (⇧+Cmd/Ctrl+Enter) map to Monaco's insertLineAfter/Before, which drop
+    // indentation under autoIndent:"none". Re-bind them so the new line keeps
+    // its level: a line below inherits the current indent and steps in after a
+    // block header; a line above matches the current line's indentation.
+    const insertLine = (above: boolean): void => {
+      const position = editor.getPosition();
+      if (position === null) return;
+      const { lineNumber } = position;
+      const currentLine = model.getLineContent(lineNumber);
+      start();
+      if (above) {
+        const indent = leadingWhitespace(currentLine);
+        editor.setPosition({ lineNumber, column: 1 });
+        editor.trigger("keyboard", "type", { text: `${indent}\n` });
+        editor.setPosition({ lineNumber, column: indent.length + 1 });
+      } else {
+        const indent = enterIndent(currentLine, indentUnit());
+        editor.setPosition({ lineNumber, column: model.getLineMaxColumn(lineNumber) });
+        editor.trigger("keyboard", "type", { text: `\n${indent}` });
+      }
+    };
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => insertLine(false));
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, () =>
+      insertLine(true),
+    );
 
     const change = model.onDidChangeContent(update);
 
