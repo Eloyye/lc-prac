@@ -1,26 +1,49 @@
 import { useMemo, useState } from "react";
-import type { Problem, Solution } from "../types";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useLibrary } from "../store/library";
 import { allTags, filterProblems } from "../content/filter";
 import type { DifficultyFilter } from "../content/filter";
 import { ProblemCard } from "./ProblemCard";
 import { ImportDialog } from "./ImportDialog";
 
-interface LibraryProps {
-  onStart: (problem: Problem, solution: Solution) => void;
-}
-
 const DIFFICULTIES: DifficultyFilter[] = ["all", "easy", "medium", "hard"];
 
-export function Library({ onStart }: LibraryProps) {
+export function Library() {
   const problems = useLibrary((s) => s.problems);
   const addCustom = useLibrary((s) => s.addCustom);
   const removeCustom = useLibrary((s) => s.removeCustom);
 
-  const [query, setQuery] = useState("");
-  const [difficulty, setDifficulty] = useState<DifficultyFilter>("all");
-  const [tag, setTag] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const search = useSearch({ from: "/problems" });
+  // Filters live in the URL: `/problems?q=…&difficulty=…&tag=…`. Defaults map
+  // back to the values `filterProblems` expects.
+  const query = search.q ?? "";
+  const difficulty = search.difficulty ?? "all";
+  const tag = search.tag ?? null;
+
   const [importing, setImporting] = useState(false);
+
+  const setQuery = (value: string): void => {
+    navigate({
+      to: "/problems",
+      search: (prev) => ({ ...prev, q: value === "" ? undefined : value }),
+      replace: true,
+    });
+  };
+  const setDifficulty = (value: DifficultyFilter): void => {
+    navigate({
+      to: "/problems",
+      search: (prev) => ({ ...prev, difficulty: value === "all" ? undefined : value }),
+      replace: true,
+    });
+  };
+  const setTag = (value: string | null): void => {
+    navigate({
+      to: "/problems",
+      search: (prev) => ({ ...prev, tag: value === null || value === "" ? undefined : value }),
+      replace: true,
+    });
+  };
 
   const tags = useMemo(() => allTags(problems), [problems]);
   const filtered = useMemo(
@@ -92,7 +115,12 @@ export function Library({ onStart }: LibraryProps) {
               <ProblemCard
                 key={problem.id}
                 problem={problem}
-                onStart={onStart}
+                onStart={(p, s) => {
+                  navigate({
+                    to: "/problems/$problemId/$solutionId",
+                    params: { problemId: p.id, solutionId: s.id },
+                  });
+                }}
                 onDelete={removeCustom}
               />
             ))}
