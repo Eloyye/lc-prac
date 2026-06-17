@@ -83,4 +83,15 @@ export function deleteCustomProblem(id: string): void {
     KEY_CUSTOM,
     loadCustomProblems().filter((p) => p.id !== id),
   );
+  // Deleting the Problem deletes its history too: purge the Attempts and
+  // Personal Bests it owned so they can't dangle forever — or be silently
+  // inherited by a later import that reuses this id.
+  write(
+    KEY_ATTEMPTS,
+    loadAttempts().filter((a) => a.problemId !== id),
+  );
+  write(
+    KEY_BEST,
+    loadBestScores().filter((b) => b.problemId !== id),
+  );
 }
