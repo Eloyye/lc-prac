@@ -1,26 +1,28 @@
 # Backend Integration Technical Spec - CodeType
 
 > Companion to [TECH_SPEC.md](./TECH_SPEC.md). This document defines the backend target state for adding accounts, server-side persistence, and database-backed problem content.
-> Status: **Draft v0.1** - 2026-06-15
+> Status: **Draft v0.2** - 2026-06-17
 
 ---
 
 ## 1. Summary
 
-CodeType is currently a client-only Vite/React app:
+CodeType is currently a Vite/React app with local application state and a small development-only Node service for Pyright:
 
-- Curated problems are hardcoded in `src/content/problems.ts`.
-- User-imported problems, attempts, and best scores are persisted in `localStorage` through `src/persistence/storage.ts`.
+- Bundled Problems are hardcoded in `src/content/problems.ts`.
+- Custom Problems, bundled Problem Overrides and Tombstones, Attempts, Personal Bests, and Settings are persisted in `localStorage` through `src/persistence/storage.ts`.
+- Pyright runs over WebSocket at `/lsp` through a Vite development-server plugin. Production builds do not currently host the language server.
 - There is no account model, cloud sync, or server-owned source of truth.
 
 The backend integration should move CodeType to a **monolithic TypeScript/Node architecture**:
 
-- One Node process serves the built SPA and the API in production.
+- One application-server process serves the built SPA, API, and LSP WebSocket endpoint in production; it owns short-lived Pyright child processes for active LSP connections.
 - Hono owns HTTP routing, middleware, and API composition.
 - Better Auth owns authentication and session management.
 - SQLite is the durable datastore.
 - Drizzle ORM owns app schema definitions, typed queries, and migrations.
 - Pino owns structured application and request logging.
+- The Node server hosts Pyright over WebSocket at `/lsp` in production.
 
 This keeps deployment simple while unlocking account-backed persistence, synced custom problem sets, and future features like spaced repetition queues and progress dashboards.
 
@@ -29,8 +31,8 @@ This keeps deployment simple while unlocking account-backed persistence, synced 
 ## 2. Goals
 
 - Add email/password authentication with secure session cookies.
-- Replace hardcoded runtime problem loading with database-backed curated problems and user custom problems.
-- Persist attempts, best scores, settings, and future SRS state server-side.
+- Replace hardcoded runtime Problem loading with a database-backed personalized Library of bundled Problems, bundled Overrides/Tombstones, and custom Problems.
+- Persist Attempts, Personal Bests, Settings, and future SRS state server-side.
 - Preserve the current typing experience and data model shape as much as possible.
 - Keep the app deployable as a single monolith.
 - Add structured logs that are useful in development and production without leaking code submissions, passwords, cookies, or other sensitive data.
@@ -41,7 +43,8 @@ This keeps deployment simple while unlocking account-backed persistence, synced 
 - No code execution or LeetCode-style judging.
 - No multi-region write deployment. SQLite implies a single-writer deployment unless a later replication layer is introduced.
 - No forced rewrite of the Monaco/typing-engine architecture.
-- No hosted Python language server as part of this change. The pyright-in-browser plan can remain separate.
+- No separate language-server deployment. Pyright remains a Node child process and is hosted by the same monolith in production.
+- No return to the abandoned browser-worker Pyright integration unless the browser ecosystem materially changes.
 
 ---
 
@@ -62,6 +65,7 @@ Node monolith
   |     |-- /api/attempts     typing attempt API
   |     |-- /api/stats        aggregate stats API
   |     |-- /api/settings     user settings API
+  |     |-- /lsp              Pyright WebSocket endpoint
   |
   |-- Static Vite build       index.html, assets
   |
@@ -72,13 +76,13 @@ Node monolith
 
 ### 4.2 Development topology
 
-Use two dev processes for faster iteration:
+Use two dev servers for faster iteration while keeping the current same-origin LSP behavior:
 
-- Vite dev server on `http://localhost:5173`.
+- Vite dev server on `http://localhost:5173`, including `/lsp` through the existing plugin.
 - Hono API server on `http://localhost:3000`.
 - Vite proxies `/api/*` to the Hono server.
 
-Production is still a monolith: the Hono server serves both `/api/*` and the Vite `dist/` assets.
+Extract the existing Pyright WebSocket bridge into a shared server-only module used by Vite in development and the Node monolith in production. Production remains a monolith: the Node server serves `/api/*`, `/lsp`, and the Vite `dist/` assets.
 
 ### 4.3 Request flow
 
@@ -104,20 +108,30 @@ Current docs support the following integration points:
 - Better Auth's Hono integration can load the session with `auth.api.getSession({ headers: c.req.raw.headers })` and place `user` / `session` in Hono context variables.
 - Drizzle Kit supports SQLite migration config with `dialect: "sqlite"`, a schema path, and a database file URL.
 
+### 4.5 Production LSP lifecycle
+
+- `/lsp` accepts same-origin WebSocket upgrades in development and production.
+- Each active browser connection gets an isolated `pyright-langserver --stdio` child process; language-server state is never shared across users.
+- Anonymous practice may use `/lsp`, subject to per-IP and global connection limits.
+- Close idle connections and terminate their child processes after a configurable timeout.
+- A socket close, server shutdown, or child-process failure must dispose both sides promptly.
+- Log connection lifecycle and failures without logging document text or JSON-RPC payloads.
+
 ---
 
 ## 5. Recommended Stack
 
-| Layer          | Choice                                 | Notes                                                                      |
-| -------------- | -------------------------------------- | -------------------------------------------------------------------------- |
-| HTTP           | Hono                                   | Small, type-friendly, works well with Web-standard `Request`/`Response`.   |
-| Runtime        | Node.js 20+                            | Keep current engine floor. Revisit if adopting built-in `node:sqlite`.     |
-| Auth           | Better Auth                            | Framework-agnostic auth, Hono-compatible handler, Drizzle adapter.         |
-| Database       | SQLite                                 | Best fit for a single-user/small-team monolith and simple deployment.      |
-| SQLite driver  | `better-sqlite3`                       | Mature local file driver. Use WAL mode and a durable volume in production. |
-| ORM/migrations | Drizzle ORM + Drizzle Kit              | Type-safe schema/query layer and generated migrations.                     |
-| Logging        | Pino                                   | Structured JSON logs in production, pretty transport only in development.  |
-| Validation     | A schema validator at route boundaries | Use one consistently for body/query parsing before service calls.          |
+| Layer             | Choice                                 | Notes                                                                      |
+| ----------------- | -------------------------------------- | -------------------------------------------------------------------------- |
+| HTTP              | Hono                                   | Small, type-friendly, works well with Web-standard `Request`/`Response`.   |
+| Runtime           | Node.js 20+                            | Keep current engine floor. Revisit if adopting built-in `node:sqlite`.     |
+| Auth              | Better Auth                            | Framework-agnostic auth, Hono-compatible handler, Drizzle adapter.         |
+| Database          | SQLite                                 | Best fit for a single-user/small-team monolith and simple deployment.      |
+| SQLite driver     | `better-sqlite3`                       | Mature local file driver. Use WAL mode and a durable volume in production. |
+| ORM/migrations    | Drizzle ORM + Drizzle Kit              | Type-safe schema/query layer and generated migrations.                     |
+| Logging           | Pino                                   | Structured JSON logs in production, pretty transport only in development.  |
+| Validation        | A schema validator at route boundaries | Use one consistently for body/query parsing before service calls.          |
+| Code intelligence | Pyright over WebSocket                 | Same-origin `/lsp`; one isolated child process per active connection.      |
 
 ---
 
@@ -132,10 +146,11 @@ server/
   env.ts                    # typed env parsing
   logger.ts                 # Pino root logger
   auth.ts                   # Better Auth config
+  lsp.ts                    # Pyright WebSocket bridge shared with Vite dev
   db/
     client.ts               # SQLite + Drizzle instance
     schema.ts               # app tables + auth schema exports if needed
-    seed.ts                 # seed curated problems
+    seed.ts                 # seed bundled Problems
     migrate.ts              # optional programmatic migration runner
   middleware/
     request-logger.ts
@@ -160,6 +175,7 @@ src/
     auth.ts                 # Better Auth React client
     problems.ts
     attempts.ts
+    settings.ts
   store/
     library.ts              # switch from local sync loading to async API loading
     session.ts              # posts completed attempts to API
@@ -187,8 +203,8 @@ Initial auth scope:
 
 - Email/password sign-up and sign-in.
 - Session-cookie authentication.
-- One `user` owns custom problems, attempts, best scores, settings, and SRS state.
-- Curated problems are globally readable and not owned by any user.
+- One `user` owns custom Problems, bundled Overrides/Tombstones, Attempts, Personal Bests, Settings, and SRS state.
+- Bundled Problems are globally readable and not owned by any user. A user's edit or hide action never mutates the bundled row.
 
 ### 7.2 Better Auth server config
 
@@ -292,28 +308,30 @@ Better Auth will own its required auth tables. App-owned tables should be explic
 
 #### `problems`
 
-Stores both curated and user-created problems.
+Stores canonical bundled Problems and user-owned custom Problems. A bundled Problem is never edited in place for one user; personalization lives in `problem_overrides` and `problem_tombstones`.
 
-| Column          | Type                 | Notes                                                |
-| --------------- | -------------------- | ---------------------------------------------------- |
-| `id`            | text pk              | Stable UUID/ULID.                                    |
-| `slug`          | text unique nullable | Stable slug for curated problems, e.g. `two-sum`.    |
-| `title`         | text                 | Required.                                            |
-| `difficulty`    | text                 | `easy`, `medium`, `hard`.                            |
-| `origin`        | text                 | `curated` or `custom`.                               |
-| `owner_user_id` | text nullable        | Null for curated rows; user id for custom rows.      |
-| `source`        | text nullable        | `leetcode`, `custom`, etc.                           |
-| `external_id`   | text nullable        | Optional upstream id.                                |
-| `url`           | text nullable        | External reference URL.                              |
-| `statement`     | text nullable        | Optional; avoid copyrighted imports unless licensed. |
-| `created_at_ms` | integer              | Epoch ms.                                            |
-| `updated_at_ms` | integer              | Epoch ms.                                            |
+| Column           | Type                 | Notes                                                         |
+| ---------------- | -------------------- | ------------------------------------------------------------- |
+| `id`             | text pk              | Stable logical id used in routes and Attempts.                |
+| `slug`           | text unique nullable | Optional stable slug for bundled Problems, e.g. `two-sum`.    |
+| `title`          | text                 | Required.                                                     |
+| `difficulty`     | text                 | `easy`, `medium`, `hard`.                                     |
+| `origin`         | text                 | `bundled` or `custom`.                                        |
+| `owner_user_id`  | text nullable        | Null for bundled rows; owning user id for custom rows.        |
+| `url`            | text nullable        | External reference URL.                                       |
+| `statement`      | text nullable        | Markdown description; respect the content licensing policy.   |
+| `expected_time`  | text nullable        | Problem-level target time complexity.                         |
+| `expected_space` | text nullable        | Problem-level target space complexity.                        |
+| `archived_at_ms` | integer nullable     | Set when a custom Problem is removed from the active Library. |
+| `created_at_ms`  | integer              | Epoch ms.                                                     |
+| `updated_at_ms`  | integer              | Epoch ms.                                                     |
 
 Access rules:
 
-- Curated problems are readable by everyone.
-- Custom problems are readable/writable only by `owner_user_id`.
-- Custom deletes should soft-delete only if attempts must remain browsable.
+- Bundled Problems are globally readable.
+- Custom Problems are readable/writable only by `owner_user_id`.
+- Archiving a custom Problem removes it from the active Library but retains it for Attempt history and Stats.
+- Permanently deleting an archived custom Problem is a separate explicit operation that transactionally purges its Attempts and Personal Bests.
 
 #### `solutions`
 
@@ -332,6 +350,17 @@ Access rules:
 
 Access rules inherit from the parent problem.
 
+#### `problem_examples`
+
+| Column        | Type          | Notes                                 |
+| ------------- | ------------- | ------------------------------------- |
+| `id`          | text pk       | Stable UUID/ULID.                     |
+| `problem_id`  | text fk       | References `problems.id`.             |
+| `input`       | text          | Required example input.               |
+| `output`      | text          | Required example output.              |
+| `explanation` | text nullable | Optional explanation.                 |
+| `sort_order`  | integer       | Preserves the authored display order. |
+
 #### `tags`
 
 | Column | Type        | Notes                                      |
@@ -346,56 +375,83 @@ Access rules inherit from the parent problem.
 | `problem_id` | text fk | Composite primary key with `tag_id`.     |
 | `tag_id`     | text fk | Composite primary key with `problem_id`. |
 
+#### `problem_overrides`
+
+Stores a user's full-Problem snapshot that shadows one bundled Problem. A full validated snapshot matches the current local Override behavior and keeps provenance as `origin: "bundled"`.
+
+| Column               | Type    | Notes                                                                       |
+| -------------------- | ------- | --------------------------------------------------------------------------- |
+| `user_id`            | text fk | Composite primary key.                                                      |
+| `bundled_problem_id` | text fk | Composite primary key; must reference a bundled Problem.                    |
+| `snapshot_json`      | text    | Validated `Problem` DTO, including Solutions, tags, metadata, and examples. |
+| `updated_at_ms`      | integer | Epoch ms.                                                                   |
+
+Reset deletes this row and reveals the current bundled Problem again.
+
+#### `problem_tombstones`
+
+| Column               | Type    | Notes                                                    |
+| -------------------- | ------- | -------------------------------------------------------- |
+| `user_id`            | text fk | Composite primary key.                                   |
+| `bundled_problem_id` | text fk | Composite primary key; must reference a bundled Problem. |
+| `hidden_at_ms`       | integer | Epoch ms.                                                |
+
+A Tombstone hides a bundled Problem from one user's Library. Hiding retains the Override, Attempts, and Personal Bests so restoring the Problem restores the user's personalized content and history.
+
 #### `attempts`
 
-| Column             | Type          | Notes                                              |
-| ------------------ | ------------- | -------------------------------------------------- |
-| `id`               | text pk       | Client may generate id before POST.                |
-| `user_id`          | text fk       | Required.                                          |
-| `problem_id`       | text fk       | Required.                                          |
-| `solution_id`      | text fk       | Required.                                          |
-| `mode`             | text          | `copy`, `recall`, or `free`.                       |
-| `cpm`              | real          | Required.                                          |
-| `wpm`              | real          | Required.                                          |
-| `accuracy_pct`     | real          | Required.                                          |
-| `duration_ms`      | integer       | Required.                                          |
-| `total_keystrokes` | integer       | Required for later analytics.                      |
-| `error_keystrokes` | integer       | Required for later analytics.                      |
-| `correct_chars`    | integer       | Required.                                          |
-| `error_map_json`   | text nullable | Compact JSON payload; do not over-index initially. |
-| `created_at_ms`    | integer       | Epoch ms.                                          |
+| Column              | Type          | Notes                                                                  |
+| ------------------- | ------------- | ---------------------------------------------------------------------- |
+| `id`                | text pk       | Client may generate id before POST.                                    |
+| `user_id`           | text fk       | Required.                                                              |
+| `problem_id`        | text fk       | Required.                                                              |
+| `solution_id`       | text          | Required logical id; validated against the effective Problem snapshot. |
+| `problem_title`     | text          | Snapshot for durable history rendering.                                |
+| `solution_approach` | text          | Snapshot for durable history rendering.                                |
+| `mode`              | text          | `copy`, `recall`, or `free`.                                           |
+| `cpm`               | real          | Required.                                                              |
+| `wpm`               | real          | Required.                                                              |
+| `accuracy_pct`      | real          | Required.                                                              |
+| `duration_ms`       | integer       | Required.                                                              |
+| `total_keystrokes`  | integer       | Required for later analytics.                                          |
+| `error_keystrokes`  | integer       | Required for later analytics.                                          |
+| `correct_chars`     | integer       | Required.                                                              |
+| `error_map_json`    | text nullable | Compact JSON payload; do not over-index initially.                     |
+| `created_at_ms`     | integer       | Epoch ms.                                                              |
 
 Access rules:
 
 - Users can only read and write their own attempts.
-- Server should verify the referenced problem/solution is readable by the user.
+- Server should verify the referenced Problem/Solution is readable by the user.
+- `solution_id` is intentionally not a database foreign key because a bundled Override may contain a user-owned Solution that exists only inside `snapshot_json`.
+- Attempt snapshots allow Stats and history to render after an Override changes or a custom Problem is archived.
 
 #### `best_scores`
 
-| Column              | Type    | Notes                         |
-| ------------------- | ------- | ----------------------------- |
-| `user_id`           | text fk | Composite primary key.        |
-| `problem_id`        | text fk | Composite primary key.        |
-| `solution_id`       | text fk | Composite primary key.        |
-| `mode`              | text    | Composite primary key.        |
-| `best_cpm`          | real    | Primary ranking metric.       |
-| `best_accuracy_pct` | real    | Tie-breaker / quality metric. |
-| `best_duration_ms`  | integer | Tie-breaker.                  |
-| `attempt_id`        | text fk | Best attempt source.          |
-| `updated_at_ms`     | integer | Epoch ms.                     |
+| Column              | Type    | Notes                             |
+| ------------------- | ------- | --------------------------------- |
+| `user_id`           | text fk | Composite primary key.            |
+| `problem_id`        | text fk | Composite primary key.            |
+| `solution_id`       | text    | Composite primary key logical id. |
+| `mode`              | text    | Composite primary key.            |
+| `best_cpm`          | real    | Primary ranking metric.           |
+| `best_accuracy_pct` | real    | Tie-breaker / quality metric.     |
+| `best_duration_ms`  | integer | Tie-breaker.                      |
+| `attempt_id`        | text fk | Best attempt source.              |
+| `updated_at_ms`     | integer | Epoch ms.                         |
 
 Update this table transactionally when inserting an attempt.
 
 #### `user_settings`
 
-| Column             | Type         | Notes                      |
-| ------------------ | ------------ | -------------------------- |
-| `user_id`          | text pk fk   | One settings row per user. |
-| `theme`            | text         | Current app theme.         |
-| `mode`             | text         | Last selected mode.        |
-| `smooth_caret`     | integer bool | 0/1.                       |
-| `distraction_free` | integer bool | 0/1.                       |
-| `updated_at_ms`    | integer      | Epoch ms.                  |
+| Column             | Type         | Notes                                |
+| ------------------ | ------------ | ------------------------------------ |
+| `user_id`          | text pk fk   | One Settings row per user.           |
+| `mode`             | text         | Last selected Mode.                  |
+| `distraction_free` | integer bool | Current distraction-free preference. |
+| `updated_at_ms`    | integer      | Epoch ms.                            |
+
+Theme synchronization is deferred until themes exist. Smooth-caret behavior follows `prefers-reduced-motion` and is not a synchronized Setting. Palette/dialog visibility remains ephemeral UI state.
 
 #### Future: `srs_reviews`
 
@@ -411,6 +467,8 @@ Add when Recall/SRS ships:
 
 ### 8.3 Drizzle schema sketch
 
+This sketch shows the relationships that are easy to get wrong; the implementation should also define the remaining tables listed above and Better Auth's schema.
+
 ```ts
 import { integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
@@ -419,12 +477,13 @@ export const problems = sqliteTable("problems", {
   slug: text("slug").unique(),
   title: text("title").notNull(),
   difficulty: text("difficulty", { enum: ["easy", "medium", "hard"] }).notNull(),
-  origin: text("origin", { enum: ["curated", "custom"] }).notNull(),
+  origin: text("origin", { enum: ["bundled", "custom"] }).notNull(),
   ownerUserId: text("owner_user_id"),
-  source: text("source"),
-  externalId: text("external_id"),
   url: text("url"),
   statement: text("statement"),
+  expectedTime: text("expected_time"),
+  expectedSpace: text("expected_space"),
+  archivedAtMs: integer("archived_at_ms"),
   createdAtMs: integer("created_at_ms").notNull(),
   updatedAtMs: integer("updated_at_ms").notNull(),
 });
@@ -442,6 +501,17 @@ export const solutions = sqliteTable("solutions", {
   sortOrder: integer("sort_order").notNull().default(0),
   createdAtMs: integer("created_at_ms").notNull(),
   updatedAtMs: integer("updated_at_ms").notNull(),
+});
+
+export const problemExamples = sqliteTable("problem_examples", {
+  id: text("id").primaryKey(),
+  problemId: text("problem_id")
+    .notNull()
+    .references(() => problems.id, { onDelete: "cascade" }),
+  input: text("input").notNull(),
+  output: text("output").notNull(),
+  explanation: text("explanation"),
+  sortOrder: integer("sort_order").notNull().default(0),
 });
 
 export const tags = sqliteTable("tags", {
@@ -462,15 +532,40 @@ export const problemTags = sqliteTable(
   (table) => [primaryKey({ columns: [table.problemId, table.tagId] })],
 );
 
+export const problemOverrides = sqliteTable(
+  "problem_overrides",
+  {
+    userId: text("user_id").notNull(),
+    bundledProblemId: text("bundled_problem_id")
+      .notNull()
+      .references(() => problems.id, { onDelete: "cascade" }),
+    snapshotJson: text("snapshot_json").notNull(),
+    updatedAtMs: integer("updated_at_ms").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.bundledProblemId] })],
+);
+
+export const problemTombstones = sqliteTable(
+  "problem_tombstones",
+  {
+    userId: text("user_id").notNull(),
+    bundledProblemId: text("bundled_problem_id")
+      .notNull()
+      .references(() => problems.id, { onDelete: "cascade" }),
+    hiddenAtMs: integer("hidden_at_ms").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.bundledProblemId] })],
+);
+
 export const attempts = sqliteTable("attempts", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
   problemId: text("problem_id")
     .notNull()
     .references(() => problems.id),
-  solutionId: text("solution_id")
-    .notNull()
-    .references(() => solutions.id),
+  solutionId: text("solution_id").notNull(),
+  problemTitle: text("problem_title").notNull(),
+  solutionApproach: text("solution_approach").notNull(),
   mode: text("mode", { enum: ["copy", "recall", "free"] }).notNull(),
   cpm: real("cpm").notNull(),
   wpm: real("wpm").notNull(),
@@ -567,7 +662,7 @@ type MeResponse = {
 
 `GET /api/problems`
 
-Returns curated problems plus the signed-in user's custom problems. Anonymous users only receive curated problems.
+Returns the caller's effective Library: visible bundled Problems with any personal Overrides applied, followed by the signed-in user's active custom Problems. Anonymous users receive pristine bundled Problems only.
 
 Query params:
 
@@ -575,6 +670,7 @@ Query params:
 - `difficulty`
 - `tag`
 - `origin`
+- `status` (`active` by default; authenticated users may request `archived` custom Problems)
 - `limit`
 - `cursor`
 
@@ -589,19 +685,31 @@ type ProblemListResponse = {
 
 `GET /api/problems/:id`
 
-Returns one readable problem with its solutions.
+Returns one readable effective Problem with its Solutions and examples. A Tombstoned bundled Problem is not readable through the active Library until restored.
 
 `POST /api/problems`
 
-Protected. Creates a custom problem with one or more solutions.
+Protected. Creates a custom Problem with one or more Solutions.
 
 `PATCH /api/problems/:id`
 
-Protected. Only allowed for the owning user's custom problems.
+Protected. Updates the owner's custom Problem or upserts the caller's full Override for a bundled Problem. The submitted `origin` and logical ids must remain unchanged.
 
 `DELETE /api/problems/:id`
 
-Protected. Only allowed for the owning user's custom problems. Prefer soft delete if historical attempts should continue to render.
+Protected. Hides a bundled Problem by creating a Tombstone or archives the owner's custom Problem. Both operations retain Overrides, Attempts, and Personal Bests.
+
+`POST /api/problems/:id/restore`
+
+Protected. Removes a bundled Tombstone or clears `archived_at_ms` for the owner's custom Problem.
+
+`POST /api/problems/:id/reset`
+
+Protected. Deletes the caller's bundled Override and reveals the current bundled version. This does not change Tombstone state or delete history.
+
+`DELETE /api/problems/:id/permanent`
+
+Protected. Permanently deletes an archived custom Problem and transactionally purges its Attempts and Personal Bests. Bundled Problems cannot be permanently deleted by a user.
 
 ### 9.5 Attempts
 
@@ -668,7 +776,7 @@ Protected. Returns persisted user settings.
 
 `PUT /api/settings`
 
-Protected. Replaces the settings row.
+Protected. Replaces the Settings row. The initial DTO contains only `mode` and `distractionFree`.
 
 ---
 
@@ -692,7 +800,7 @@ Current:
 
 ```ts
 function merged(): Problem[] {
-  return [...PROBLEMS, ...loadCustomProblems()];
+  return mergedLibrary(PROBLEMS);
 }
 ```
 
@@ -710,17 +818,24 @@ Store shape should become async-aware:
 - `problems`
 - `status: "idle" | "loading" | "ready" | "error"`
 - `load()`
-- `addCustom()`
-- `removeCustom()`
+- `saveProblem()`
+- `deleteProblem()`
+- `restoreProblem()`
+- `resetProblem()`
+- `permanentlyDeleteProblem()`
 
-### 10.3 Replace custom import persistence
+TanStack Router loaders for `/problems/$problemId` and `/problems/$problemId/$solutionId` must await Library hydration or fetch the requested effective Problem directly before deciding `notFound()`. A direct navigation or refresh must not transiently 404 while API loading is in progress.
 
-Current `ImportDialog` calls `useLibrary.addCustom`, which writes to localStorage.
+### 10.3 Replace Problem persistence
+
+Current `ProblemDialog` calls `useLibrary.saveProblem`, which routes writes to custom storage or the bundled Override layer based on the logical id.
 
 Target:
 
-- `ImportDialog` still creates the same `Problem` input shape.
-- `useLibrary.addCustom` posts to `POST /api/problems`.
+- `ProblemDialog` continues to create the same `Problem` input shape, including expected complexity and structured examples.
+- `useLibrary.saveProblem` posts a new custom Problem or patches an existing custom/bundled Problem.
+- Bundled hide, restore, and Reset actions call their explicit endpoints and retain history.
+- Custom archive, restore, and permanent-delete actions use distinct UI labels and confirmations.
 - On success, append or reload server state.
 - On unauthenticated use, either show sign-in or keep a local draft until sign-in.
 
@@ -736,18 +851,28 @@ Target:
 - POST the completed attempt to `/api/attempts`.
 - Server validates that the problem and solution are readable by the user.
 - Server updates best score in the same transaction.
+- `ProblemCard`, `ProblemDetail`, `Results`, and the Stats page read Personal Bests/history from API-backed state rather than `localStorage`.
 
 If the POST fails, show a non-blocking save error and keep the completed result visible. Optionally queue unsaved attempts in localStorage for retry.
 
 ### 10.5 Local storage after backend
 
+Offer one idempotent, user-confirmed import after the first sign-in. The importer reads the current versioned local keys for custom Problems, bundled Overrides, Tombstones, Attempts, Personal Bests, and Settings. Personal Bests should be recomputed from imported Attempts rather than trusted as independent facts.
+
+Conflict rules:
+
+- The import targets the signed-in account and records completion so it is not repeated silently.
+- Existing server ids win on collision; the UI reports skipped records instead of overwriting server data.
+- After import, the server becomes authoritative for authenticated data.
+- A new device loads server Settings. On the first import from an existing browser, explicit local `mode` and `distractionFree` values are imported.
+
 Retain localStorage only for:
 
 - in-progress unsaved attempt recovery
 - pre-auth guest drafts, if supported
-- UI-only preferences before login
+- anonymous Settings before login
 
-Do not keep localStorage as a second source of truth for authenticated attempts or custom problems.
+Do not keep localStorage as a second source of truth for authenticated Attempts, Problems, Overrides/Tombstones, Personal Bests, or Settings.
 
 ---
 
@@ -849,10 +974,17 @@ Recommended service-level events:
 
 - `auth.sign_up.completed`
 - `problem.custom.created`
-- `problem.custom.deleted`
+- `problem.custom.archived`
+- `problem.custom.permanently_deleted`
+- `problem.bundled.override_updated`
+- `problem.bundled.hidden`
+- `problem.bundled.restored`
 - `attempt.created`
 - `attempt.personal_best.updated`
 - `settings.updated`
+- `lsp.connected`
+- `lsp.disconnected`
+- `lsp.process_failed`
 
 Do not log raw solution code. For attempts, log identifiers and metrics:
 
@@ -898,6 +1030,9 @@ logger.info(
 - Keep custom imported problems private by default.
 - Do not scrape or store LeetCode statements unless licensing is handled.
 - Add basic auth route rate limiting before public deployment.
+- Validate the WebSocket `Origin` for `/lsp` and enforce per-IP/global connection limits.
+- Apply an idle timeout to LSP connections and always reap the associated Pyright child process.
+- Do not log LSP document text or JSON-RPC payloads.
 
 ---
 
@@ -912,6 +1047,9 @@ PUBLIC_APP_URL=https://codetype.example.com
 BETTER_AUTH_SECRET=...
 DB_FILE_NAME=/data/codetype.sqlite
 LOG_LEVEL=info
+LSP_MAX_CONNECTIONS=20
+LSP_MAX_CONNECTIONS_PER_IP=2
+LSP_IDLE_TIMEOUT_MS=900000
 ```
 
 ### 13.2 Production start
@@ -921,7 +1059,7 @@ Recommended production flow:
 1. Install dependencies.
 2. Build the client and server.
 3. Run migrations.
-4. Seed curated problems if needed.
+4. Seed bundled Problems if needed.
 5. Start the Hono Node server.
 
 ### 13.3 SQLite hosting requirement
@@ -947,20 +1085,32 @@ Acceptance criteria:
 - Every request emits one structured log with a request id.
 - Production server can serve the built SPA.
 
-### Phase 2 - Database foundation
+### Phase 2 - Production Pyright
+
+- Extract the existing Vite Pyright bridge into a shared server-only module.
+- Keep `/lsp` working through Vite development and mount it in the production Node server.
+- Add origin checks, connection caps, idle cleanup, and child-process lifecycle logs.
+
+Acceptance criteria:
+
+- Completion, hover, signature help, and diagnostics work in both development and the production server.
+- Closing or timing out a WebSocket terminates its Pyright process.
+- Exceeding a connection limit rejects the upgrade without spawning Pyright.
+
+### Phase 3 - Database foundation
 
 - Add SQLite client.
 - Add Drizzle schema and migration config.
-- Add app tables for problems, solutions, tags, attempts, best scores, and settings.
-- Create a seed script that imports curated problems from the current `PROBLEMS` data.
+- Add app tables for Problems, Solutions, examples, tags, Overrides, Tombstones, Attempts, Personal Bests, and Settings.
+- Create a seed script that imports bundled Problems from the current `PROBLEMS` data without dropping expected complexity or examples.
 
 Acceptance criteria:
 
 - `pnpm db:generate` creates migrations.
 - `pnpm db:migrate` applies migrations to a local SQLite file.
-- `pnpm db:seed` loads current curated problems.
+- `pnpm db:seed` loads current bundled Problems with the current `Problem`/`Solution` shape.
 
-### Phase 3 - Authentication
+### Phase 4 - Authentication
 
 - Add Better Auth server config with Drizzle SQLite adapter.
 - Mount `/api/auth/*`.
@@ -973,25 +1123,28 @@ Acceptance criteria:
 - Protected routes return 401 when anonymous.
 - Request logs include user id for authenticated API requests.
 
-### Phase 4 - Problems API
+### Phase 5 - Library API
 
-- Add problem list/detail routes.
-- Add custom problem create/update/delete.
+- Add effective Library list/detail routes.
+- Add custom Problem create/update/archive/restore/permanent-delete behavior.
+- Add bundled Override, hide/restore, and Reset behavior.
 - Replace `src/store/library.ts` local merge with API-backed loading.
 - Keep current `Problem` / `Solution` client type shape.
+- Make route loaders await Library hydration so deep links and refreshes do not transiently return not-found.
 
 Acceptance criteria:
 
-- Curated problems render from SQLite, not from `src/content/problems.ts`.
+- Bundled Problems render from SQLite, not from `src/content/problems.ts`.
 - Signed-in users can import a custom solution and see it after refresh.
-- One user's custom problems are invisible to another user.
+- One user's custom Problems, Overrides, and Tombstones are invisible to another user.
+- Hiding or archiving a Problem preserves its Attempts and Personal Bests; permanent deletion is explicit and limited to archived custom Problems.
 
-### Phase 5 - Attempts and best scores
+### Phase 6 - Attempts and Personal Bests
 
 - Add `POST /api/attempts`.
 - Add attempt history and best-score queries.
 - Replace `saveAttempt` and `bestFor` with API calls.
-- Update results UI to use the API response for personal-best state.
+- Update Results, Problem cards/details, and Stats to use API-backed Attempt/Personal Best state.
 
 Acceptance criteria:
 
@@ -999,16 +1152,16 @@ Acceptance criteria:
 - Personal best updates transactionally.
 - Refreshing the app preserves attempt history and best scores.
 
-### Phase 6 - Settings and local migration
+### Phase 7 - Settings and local migration
 
-- Add settings endpoint.
-- Persist mode/theme/distraction-free settings server-side.
-- Optionally offer a one-time "import local data" flow for existing localStorage attempts/custom problems.
+- Add the Settings endpoint for `mode` and `distractionFree` only.
+- Add a user-confirmed, idempotent import for existing local custom Problems, bundled Overrides/Tombstones, Attempts, and Settings.
+- Recompute Personal Bests from imported Attempts.
 
 Acceptance criteria:
 
 - Settings sync after sign-in and refresh.
-- Existing local data can be imported or intentionally ignored.
+- Existing local data can be imported once or intentionally ignored without silent overwrites.
 
 ---
 
@@ -1026,34 +1179,45 @@ Acceptance criteria:
 - Hono route tests against a temporary SQLite database.
 - Better Auth sign-up/sign-in/session flow.
 - Problem CRUD with two users to verify isolation.
+- Bundled Override/Tombstone merge behavior with two users.
+- Archive/restore retains history; permanent custom deletion purges it.
 - Attempt creation updates `best_scores`.
+- Production `/lsp` connection limits and child-process cleanup.
 
 ### Frontend tests
 
 - Library loading states.
-- Import dialog posts to API.
+- Problem dialog posts to the API for custom Problems and bundled Overrides.
+- Direct Problem/Session links await Library hydration before resolving not-found.
 - Results screen handles saved, personal-best, and save-failed states.
+- Local import is idempotent and reports conflicts.
 
 ### Manual checks
 
-- Anonymous user sees curated problems only.
-- Signed-in user sees curated + own custom problems.
+- Anonymous user sees pristine bundled Problems only.
+- Signed-in user sees visible bundled Problems with personal Overrides plus active custom Problems.
+- Hide/archive and restore preserve Attempt history and Personal Bests.
 - Refresh preserves auth session.
 - Production build serves SPA fallback routes.
+- Production `/lsp` provides Pyright features and reaps disconnected child processes.
 - Logs do not include password, cookies, auth headers, or solution code.
 
 ---
 
-## 16. Open Decisions
+## 16. Recorded Decisions
 
-| Decision                                      | Recommendation                                                        |
-| --------------------------------------------- | --------------------------------------------------------------------- |
-| Allow guest custom problems after backend?    | No for first backend version. Require sign-in for server persistence. |
-| Keep localStorage fallback?                   | Only for unsaved attempt retry or pre-auth drafts.                    |
-| Soft delete custom problems?                  | Yes if historical attempts need to keep resolving titles/code.        |
-| Use slugs or UUIDs in URLs?                   | Use UUID internally; add slugs for curated public routes later.       |
-| Store problem statements?                     | Defer unless licensing is clear. Keep external URLs for LeetCode.     |
-| Use one dev server or Vite + API dev servers? | Use Vite + API dev servers initially; production remains a monolith.  |
+| Decision           | Chosen behavior                                                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Removing Problems  | Hide bundled Problems with per-user Tombstones and archive custom Problems. Preserve Overrides, Attempts, and Personal Bests. Permanent deletion is a separate explicit action for archived custom Problems. |
+| Production Pyright | The production Node monolith hosts same-origin `/lsp`; each connection gets an isolated Pyright child process with origin checks, caps, idle timeout, and cleanup.                                           |
+| Settings scope     | Synchronize only `mode` and `distractionFree` initially. Defer themes; derive caret motion from `prefers-reduced-motion`; keep dialog/palette visibility ephemeral.                                          |
+
+Implementation defaults retained from v0.1:
+
+- Require sign-in for server-persisted custom Problems and Attempts. Anonymous practice can keep pre-auth drafts or unsaved retries locally.
+- Use the existing stable logical Problem ids in URLs; a separate public slug system can be added later.
+- Store statements only when content rights are clear; bundled LeetCode content should continue linking out.
+- Use Vite plus the API server during development and one Node monolith in production.
 
 ---
 
@@ -1063,8 +1227,8 @@ Keep the first PR small:
 
 - Add Hono server with `/api/health`.
 - Add Pino request logging.
-- Add Drizzle SQLite config and initial schema.
-- Add migration and seed scripts.
+- Add environment validation and production SPA/static fallback serving.
+- Add focused server tests and production build/start scripts.
 - Do not wire React to the API yet.
 
-This creates the backend foundation without destabilizing the current typing workflow.
+This creates a deployable server foundation without prematurely splitting the database work away from the first end-to-end Library slice.
