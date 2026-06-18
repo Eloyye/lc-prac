@@ -14,7 +14,7 @@ help, and diagnostics via pyright) is built into development and production.
 
 ```sh
 pnpm install   # also enables the git pre-commit hook (via core.hooksPath)
-pnpm dev       # app + pyright IntelliSense on http://localhost:5173 (or next free port)
+pnpm dev       # client + API + pyright IntelliSense; open http://localhost:5173 (or next free port)
 ```
 
 The shared server bridge mounts pyright over same-origin WebSocket `/lsp` in
@@ -26,7 +26,8 @@ install is required. `vite preview` does not include the LSP.
 
 | Command                             | What it does                                         |
 | ----------------------------------- | ---------------------------------------------------- |
-| `pnpm dev`                          | Vite dev server + pyright IntelliSense (on `/lsp`)   |
+| `pnpm dev`                          | Client + API together (`concurrently`: Vite + Hono)  |
+| `pnpm dev:client`                   | Vite dev server + pyright IntelliSense (on `/lsp`)   |
 | `pnpm dev:server`                   | Hono API server alone (tsx watch, on `PORT`)         |
 | `pnpm build`                        | Type-check, then build the client for production     |
 | `pnpm start`                        | Run production (`dist/`, `/api`, and `/lsp`)         |
@@ -62,9 +63,9 @@ or JSON-RPC payloads.
 The Library is database-backed: bundled Problems live in SQLite (Drizzle ORM
 over `better-sqlite3`), not in the client bundle. The server applies migrations
 on boot; seed the bundled content once with `pnpm db:seed`. A production rollout
-is build → `pnpm db:migrate` → `pnpm db:seed` → `pnpm start`. In development run
-the API alongside Vite (`pnpm dev:server`, which Vite proxies `/api` to) and seed
-the database so the Library loads.
+is build → `pnpm db:migrate` → `pnpm db:seed` → `pnpm start`. In development
+`pnpm dev` runs the API alongside Vite (which proxies `/api` to it); run
+`pnpm db:seed` once so the Library has content to load.
 
 Configuration is validated at startup and fails fast with an actionable message
 (see [`server/env.ts`](server/env.ts)):
