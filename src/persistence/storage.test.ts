@@ -10,11 +10,13 @@ import {
   loadCustomProblems,
   loadHidden,
   loadOverrides,
+  loadSettings,
   mergedLibrary,
   recentAttemptsForProblem,
   saveAttempt,
   saveCustomProblem,
   saveOverride,
+  saveSettings,
 } from "./storage";
 
 // The test runtime is `node`, so there is no real localStorage — back it with
@@ -144,6 +146,24 @@ describe("recentAttemptsForProblem", () => {
     expect(recent).toHaveLength(5);
     expect(recent.map((a) => a.id)).toEqual(["a7", "a6", "a5", "a4", "a3"]);
     expect(recent.every((a) => a.problemId === "p1")).toBe(true);
+  });
+});
+
+describe("mode-aware personal bests", () => {
+  it("tracks Copy and Recall scores independently", () => {
+    saveAttempt(makeAttempt("copy", "p1", "p1-s", 120));
+    saveAttempt({ ...makeAttempt("recall", "p1", "p1-s", 90), mode: "recall" });
+
+    expect(bestFor("p1", "p1-s", "copy")?.bestCpm).toBe(120);
+    expect(bestFor("p1", "p1-s", "recall")?.bestCpm).toBe(90);
+  });
+});
+
+describe("settings", () => {
+  it("uses defaults and persists mode and distraction-free", () => {
+    expect(loadSettings()).toEqual({ mode: "copy", distractionFree: false });
+    saveSettings({ mode: "recall", distractionFree: true });
+    expect(loadSettings()).toEqual({ mode: "recall", distractionFree: true });
   });
 });
 

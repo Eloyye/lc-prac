@@ -2,10 +2,24 @@ import type { Problem } from "../types";
 
 export type DifficultyFilter = "all" | "easy" | "medium" | "hard";
 
+export interface LibrarySearch {
+  q?: string;
+  difficulty?: Exclude<DifficultyFilter, "all">;
+  tag?: string;
+}
+
 export interface ProblemFilter {
   query: string;
   difficulty: DifficultyFilter;
   tag: string | null;
+}
+
+export function filterFromSearch(search: LibrarySearch): ProblemFilter {
+  return {
+    query: search.q ?? "",
+    difficulty: search.difficulty ?? "all",
+    tag: search.tag ?? null,
+  };
 }
 
 /** Sorted, de-duplicated list of every tag across the given problems. */

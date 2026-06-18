@@ -1,14 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import type { Problem } from "../types";
 import { bestFor } from "../persistence/storage";
+import type { LibrarySearch } from "../content/filter";
 import { DIFFICULTY_COLOR } from "./difficulty";
 
 interface ProblemCardProps {
   problem: Problem;
+  search: LibrarySearch;
   onDelete: (id: string) => void;
 }
 
-export function ProblemCard({ problem, onDelete }: ProblemCardProps) {
+export function ProblemCard({ problem, search, onDelete }: ProblemCardProps) {
   const bestCpms = problem.solutions
     .map((s) => bestFor(problem.id, s.id)?.bestCpm)
     .filter((v): v is number => v !== undefined);
@@ -23,6 +25,7 @@ export function ProblemCard({ problem, onDelete }: ProblemCardProps) {
             <Link
               to="/problems/$problemId"
               params={{ problemId: problem.id }}
+              search={search}
               className="hover:text-emerald-400"
             >
               {problem.title}
@@ -63,6 +66,7 @@ export function ProblemCard({ problem, onDelete }: ProblemCardProps) {
       <Link
         to="/problems/$problemId"
         params={{ problemId: problem.id }}
+        search={search}
         className="mt-auto flex items-center justify-between rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-emerald-500 hover:text-white"
       >
         <span>
