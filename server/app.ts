@@ -1,14 +1,22 @@
 import { Hono } from "hono";
 import type { Logger } from "pino";
+import type { Db } from "./db/client";
 import { requestLogger } from "./middleware/request-logger";
 import type { RequestLoggerVariables } from "./middleware/request-logger";
 import { health } from "./routes/health";
+import { createProblemsRouter } from "./routes/problems";
 import { createStaticSpa } from "./static";
 
 export type AppVariables = RequestLoggerVariables;
 
 export type CreateAppOptions = {
   logger: Logger;
+  /**
+   * Drizzle database for the Problem Library API. When provided, the
+   * `/api/problems` routes are mounted. Tests pass a migrated temporary
+   * database; omit it for a problems-free app (e.g. the health-only foundation).
+   */
+  db?: Db;
   /**
    * Absolute path to the built SPA (Vite `dist`). When provided, unmatched
    * non-API GETs are served the app shell. Omitted in tests and in development
@@ -30,6 +38,9 @@ export function createApp(options: CreateAppOptions) {
   app.use("*", requestLogger(options.logger));
 
   app.route("/api", health);
+  if (options.db !== undefined) {
+    app.route("/api/problems", createProblemsRouter(options.db));
+  }
 
   // Static + SPA fallback runs last among matchers: API routes above win, and
   // the handler itself defers API paths and non-GET methods to the 404 handler.
