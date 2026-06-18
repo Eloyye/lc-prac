@@ -1,5 +1,8 @@
-# pnpm requires build scripts to be explicitly approved. esbuild (a tsx
-# dependency, used to run the server) links its platform-native binary in a
-# postinstall step, so it is allowed to build here.
+# pnpm requires build scripts to be explicitly approved.
+#   - esbuild (a tsx dependency, used to run the server) links its platform-native
+#     binary in a postinstall step.
+#   - better-sqlite3 fetches a prebuilt native binary (prebuild-install) in its
+#     install step; it is the SQLite driver behind the Drizzle data layer.
 allowBuilds:
   esbuild: true
+  better-sqlite3: true

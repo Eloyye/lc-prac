@@ -32,9 +32,16 @@ function pyrightLsp(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), pyrightLsp()],
-  server: { port: process.env.PORT ? Number(process.env.PORT) : undefined },
+  server: {
+    port: process.env.PORT ? Number(process.env.PORT) : undefined,
+    // In development the client runs under Vite while the API runs under Hono
+    // (`pnpm dev:server`, default port 3000). Proxy `/api/*` there so the browser
+    // makes same-origin requests, matching the production monolith. `/lsp` is
+    // handled separately by the pyright plugin's upgrade handler above.
+    proxy: { "/api": { target: "http://localhost:3000", changeOrigin: true } },
+  },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "server/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}", "server/**/*.test.{ts,tsx}"],
   },
 });

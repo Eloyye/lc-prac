@@ -8,6 +8,7 @@ function capture() {
   const env = parseEnv({
     NODE_ENV: "production",
     PUBLIC_APP_URL: "https://codetype.example.com",
+    DB_FILE_NAME: "/data/codetype.sqlite",
     LOG_LEVEL: "trace",
   });
   const logger = pino(

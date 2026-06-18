@@ -1,3 +1,9 @@
+import {
+  DEFAULT_LSP_IDLE_TIMEOUT_MS,
+  DEFAULT_LSP_MAX_CONNECTIONS,
+  DEFAULT_LSP_MAX_CONNECTIONS_PER_IP,
+} from "./lsp";
+
 /**
  * Typed parsing and validation of process environment for the application
  * server. Validation runs once at startup (see `index.ts`); any invalid value
@@ -20,6 +26,7 @@ export type Env = {
   readonly LSP_MAX_CONNECTIONS: number;
   readonly LSP_MAX_CONNECTIONS_PER_IP: number;
   readonly LSP_IDLE_TIMEOUT_MS: number;
+  readonly DB_FILE_NAME: string;
 };
 
 export type EnvSource = Record<string, string | undefined>;
@@ -138,6 +145,17 @@ export function parseEnv(source: EnvSource): Env {
     issues.push("PUBLIC_APP_URL is required in production (e.g. https://codetype.example.com).");
   }
 
+  // SQLite database file. Defaults to a gitignored local file for development;
+  // production should point this at a durable volume (e.g. /data/codetype.sqlite).
+  // Drizzle Kit reads the same variable for migrations (see drizzle.config.ts).
+  let dbFileName = "./data/codetype.sqlite";
+  const rawDbFileName = source.DB_FILE_NAME;
+  if (rawDbFileName !== undefined && rawDbFileName !== "") {
+    dbFileName = rawDbFileName;
+  } else if (nodeEnv === "production") {
+    issues.push("DB_FILE_NAME is required in production (e.g. /data/codetype.sqlite).");
+  }
+
   if (issues.length > 0) {
     throw new EnvError(issues);
   }
@@ -150,10 +168,6 @@ export function parseEnv(source: EnvSource): Env {
     LSP_MAX_CONNECTIONS: lspMaxConnections,
     LSP_MAX_CONNECTIONS_PER_IP: lspMaxConnectionsPerIp,
     LSP_IDLE_TIMEOUT_MS: lspIdleTimeoutMs,
+    DB_FILE_NAME: dbFileName,
   });
 }
-import {
-  DEFAULT_LSP_IDLE_TIMEOUT_MS,
-  DEFAULT_LSP_MAX_CONNECTIONS,
-  DEFAULT_LSP_MAX_CONNECTIONS_PER_IP,
-} from "./lsp";

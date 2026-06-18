@@ -11,6 +11,7 @@ describe("parseEnv", () => {
       LSP_MAX_CONNECTIONS: 20,
       LSP_MAX_CONNECTIONS_PER_IP: 2,
       LSP_IDLE_TIMEOUT_MS: 900000,
+      DB_FILE_NAME: "./data/codetype.sqlite",
     });
   });
 
@@ -24,6 +25,7 @@ describe("parseEnv", () => {
         LSP_MAX_CONNECTIONS: "40",
         LSP_MAX_CONNECTIONS_PER_IP: "5",
         LSP_IDLE_TIMEOUT_MS: "60000",
+        DB_FILE_NAME: "/data/codetype.sqlite",
       }),
     ).toEqual({
       NODE_ENV: "production",
@@ -33,7 +35,20 @@ describe("parseEnv", () => {
       LSP_MAX_CONNECTIONS: 40,
       LSP_MAX_CONNECTIONS_PER_IP: 5,
       LSP_IDLE_TIMEOUT_MS: 60000,
+      DB_FILE_NAME: "/data/codetype.sqlite",
     });
+  });
+
+  it("respects an explicit DB_FILE_NAME", () => {
+    expect(parseEnv({ DB_FILE_NAME: "/tmp/custom.sqlite" }).DB_FILE_NAME).toBe(
+      "/tmp/custom.sqlite",
+    );
+  });
+
+  it("requires DB_FILE_NAME in production", () => {
+    expect(() =>
+      parseEnv({ NODE_ENV: "production", PUBLIC_APP_URL: "https://codetype.example.com" }),
+    ).toThrow(/DB_FILE_NAME is required/);
   });
 
   it("silences logs and derives the local origin under test", () => {
@@ -85,7 +100,14 @@ describe("parseEnv", () => {
   it("aggregates every issue into a single EnvError", () => {
     let error: unknown;
     try {
-      parseEnv({ PORT: "abc", LOG_LEVEL: "loud", NODE_ENV: "production" });
+      // DB_FILE_NAME is supplied so the only issues are the three invalid values
+      // under test, not the separately covered production DB requirement.
+      parseEnv({
+        PORT: "abc",
+        LOG_LEVEL: "loud",
+        NODE_ENV: "production",
+        DB_FILE_NAME: "/data/codetype.sqlite",
+      });
     } catch (caught) {
       error = caught;
     }
