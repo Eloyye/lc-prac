@@ -14,7 +14,6 @@ import {
 } from "vscode-languageserver-protocol/browser";
 import type {
   ProtocolConnection,
-  InitializeParams,
   CompletionItem as LspCompletionItem,
   Diagnostic,
   PublishDiagnosticsParams,
@@ -23,11 +22,11 @@ import type {
   MarkupContent,
   MarkedString,
 } from "vscode-languageserver-protocol/browser";
+import { createInitializeParams, pyrightConfiguration } from "./lsp-config";
 
 const LSP_PATH = "/lsp";
 const MARKER_OWNER = "pyright";
 const PYTHON_LANGUAGE = "python";
-const WORKSPACE_URI = "file:///";
 
 // pyright runs as a real Node language server attached to the Vite dev server
 // at `/lsp` (see the pyright-lsp plugin in vite.config.ts), so it shares the
@@ -138,35 +137,32 @@ function toMonacoSignatureHelp(result: SignatureHelp): monaco.languages.Signatur
 }
 
 const syncedDocuments = new Set<string>();
+const documentDiagnostics = new Map<
+  string,
+  { enabled: boolean; model: monaco.editor.ITextModel; diagnostics: Diagnostic[] }
+>();
 let connectionPromise: Promise<ProtocolConnection> | null = null;
 let providersRegistered = false;
 
-function initializeParams(): InitializeParams {
-  return {
-    processId: null,
-    rootUri: WORKSPACE_URI,
-    workspaceFolders: [{ uri: WORKSPACE_URI, name: "workspace" }],
-    initializationOptions: {},
-    capabilities: {
-      textDocument: {
-        synchronization: { dynamicRegistration: true },
-        completion: {
-          completionItem: { documentationFormat: ["markdown", "plaintext"] },
-        },
-        hover: { contentFormat: ["markdown", "plaintext"] },
-        signatureHelp: {},
-        publishDiagnostics: {},
-      },
-      workspace: { workspaceFolders: true, configuration: true },
-    },
-  };
+function renderDiagnostics(uri: string): void {
+  const state = documentDiagnostics.get(uri);
+  if (state === undefined || state.model.isDisposed()) return;
+  monaco.editor.setModelMarkers(
+    state.model,
+    MARKER_OWNER,
+    state.enabled ? state.diagnostics.map(toMarker) : [],
+  );
 }
 
 function handleDiagnostics(params: PublishDiagnosticsParams): void {
-  const model = monaco.editor.getModel(monaco.Uri.parse(params.uri));
-  if (model !== null) {
-    monaco.editor.setModelMarkers(model, MARKER_OWNER, params.diagnostics.map(toMarker));
-  }
+  const state = documentDiagnostics.get(params.uri);
+  if (state === undefined) return;
+  state.diagnostics = params.diagnostics;
+  renderDiagnostics(params.uri);
+}
+
+function isIntelliSenseEnabled(uri: string): boolean {
+  return documentDiagnostics.get(uri)?.enabled ?? false;
 }
 
 function lspPosition(position: monaco.Position): { line: number; character: number } {
@@ -181,7 +177,7 @@ function registerProviders(connection: ProtocolConnection): void {
     triggerCharacters: ["."],
     async provideCompletionItems(model, position) {
       const uri = model.uri.toString();
-      if (!syncedDocuments.has(uri)) return { suggestions: [] };
+      if (!syncedDocuments.has(uri) || !isIntelliSenseEnabled(uri)) return { suggestions: [] };
       try {
         const result = await connection.sendRequest(CompletionRequest.type, {
           textDocument: { uri },
@@ -205,7 +201,7 @@ function registerProviders(connection: ProtocolConnection): void {
   monaco.languages.registerHoverProvider(PYTHON_LANGUAGE, {
     async provideHover(model, position) {
       const uri = model.uri.toString();
-      if (!syncedDocuments.has(uri)) return null;
+      if (!syncedDocuments.has(uri) || !isIntelliSenseEnabled(uri)) return null;
       try {
         const result = await connection.sendRequest(HoverRequest.type, {
           textDocument: { uri },
@@ -223,7 +219,7 @@ function registerProviders(connection: ProtocolConnection): void {
     signatureHelpTriggerCharacters: ["(", ","],
     async provideSignatureHelp(model, position) {
       const uri = model.uri.toString();
-      if (!syncedDocuments.has(uri)) return null;
+      if (!syncedDocuments.has(uri) || !isIntelliSenseEnabled(uri)) return null;
       try {
         const result = await connection.sendRequest(SignatureHelpRequest.type, {
           textDocument: { uri },
@@ -255,10 +251,12 @@ async function init(): Promise<ProtocolConnection> {
   );
 
   connection.onNotification(PublishDiagnosticsNotification.type, handleDiagnostics);
-  // pyright asks the client for settings and to register capabilities; answer
-  // with defaults so it proceeds rather than waiting.
-  connection.onRequest("workspace/configuration", (params: { items: unknown[] }) =>
-    params.items.map(() => ({})),
+  // Pyright requests separate python/python.analysis/pyright settings. Keep
+  // analysis scoped to open practice documents so it never scans the host.
+  connection.onRequest(
+    "workspace/configuration",
+    (params: { items: Array<{ section?: string }> }) =>
+      params.items.map((item) => pyrightConfiguration(item.section)),
   );
   connection.onRequest("client/registerCapability", () => null);
   connection.onRequest("client/unregisterCapability", () => null);
@@ -266,7 +264,7 @@ async function init(): Promise<ProtocolConnection> {
 
   connection.listen();
 
-  await connection.sendRequest(InitializeRequest.type, initializeParams());
+  await connection.sendRequest(InitializeRequest.type, createInitializeParams());
   await connection.sendNotification(InitializedNotification.type, {});
 
   registerProviders(connection);
@@ -290,13 +288,18 @@ function clearDiagnostics(uri: monaco.Uri): void {
   }
 }
 
+export interface SyncedDocument extends monaco.IDisposable {
+  setEnabled(enabled: boolean): void;
+}
+
 /** Begin pyright analysis for a model and keep its content synced. */
-export function syncDocument(model: monaco.editor.ITextModel): monaco.IDisposable {
+export function syncDocument(model: monaco.editor.ITextModel, enabled = true): SyncedDocument {
   const uri = model.uri.toString();
   let changeSub: monaco.IDisposable | undefined;
   let connection: ProtocolConnection | undefined;
   let opened = false;
   let disposed = false;
+  documentDiagnostics.set(uri, { enabled, model, diagnostics: [] });
 
   const closeServerDocument = (): void => {
     if (connection === undefined || !opened) return;
@@ -335,12 +338,19 @@ export function syncDocument(model: monaco.editor.ITextModel): monaco.IDisposabl
     });
 
   return {
+    setEnabled: (nextEnabled) => {
+      const state = documentDiagnostics.get(uri);
+      if (state === undefined || state.enabled === nextEnabled) return;
+      state.enabled = nextEnabled;
+      renderDiagnostics(uri);
+    },
     dispose: () => {
       if (disposed) return;
       disposed = true;
       changeSub?.dispose();
       syncedDocuments.delete(uri);
       clearDiagnostics(model.uri);
+      documentDiagnostics.delete(uri);
       closeServerDocument();
     },
   };
