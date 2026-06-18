@@ -3,6 +3,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useLibrary } from "../store/library";
 import { allTags, filterProblems } from "../content/filter";
 import type { DifficultyFilter } from "../content/filter";
+import { usePreferences } from "../store/preferences";
 import { ProblemCard } from "./ProblemCard";
 import { ProblemDialog } from "./ProblemDialog";
 
@@ -12,6 +13,8 @@ export function Library() {
   const problems = useLibrary((s) => s.problems);
   const saveProblem = useLibrary((s) => s.saveProblem);
   const deleteProblem = useLibrary((s) => s.deleteProblem);
+  const openPalette = usePreferences((s) => s.openPalette);
+  const openSettings = usePreferences((s) => s.openSettings);
 
   const navigate = useNavigate();
   const search = useSearch({ from: "/problems" });
@@ -61,13 +64,29 @@ export function Library() {
               Pick a solution to practice typing from memory.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setImporting(true)}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-          >
-            Import solution
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openPalette}
+              className="rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-400 hover:border-neutral-500 hover:text-white"
+            >
+              Commands <kbd className="ml-1 font-mono text-xs">⌘K</kbd>
+            </button>
+            <button
+              type="button"
+              onClick={openSettings}
+              className="rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-400 hover:border-neutral-500 hover:text-white"
+            >
+              Settings
+            </button>
+            <button
+              type="button"
+              onClick={() => setImporting(true)}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+            >
+              Import solution
+            </button>
+          </div>
         </header>
 
         <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -112,7 +131,12 @@ export function Library() {
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((problem) => (
-              <ProblemCard key={problem.id} problem={problem} onDelete={deleteProblem} />
+              <ProblemCard
+                key={problem.id}
+                problem={problem}
+                search={search}
+                onDelete={deleteProblem}
+              />
             ))}
           </div>
         )}

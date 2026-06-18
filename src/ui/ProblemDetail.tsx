@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import type { Mode, Problem, Solution } from "../types";
 import { bestFor, hasOverride, recentAttemptsForProblem } from "../persistence/storage";
 import { useLibrary } from "../store/library";
@@ -31,6 +31,7 @@ function formatDate(iso: string): string {
 
 export function ProblemDetail({ problem }: { problem: Problem }) {
   const navigate = useNavigate();
+  const search = useSearch({ from: "/problems/$problemId" });
   const saveProblem = useLibrary((s) => s.saveProblem);
   const deleteProblem = useLibrary((s) => s.deleteProblem);
   const resetProblem = useLibrary((s) => s.resetProblem);
@@ -52,7 +53,7 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
       )
     ) {
       deleteProblem(problem.id);
-      navigate({ to: "/problems" });
+      navigate({ to: "/problems", search });
     }
   };
 
@@ -68,7 +69,11 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
     <div className="relative min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto max-w-3xl px-6 py-8">
         <div className="flex items-center justify-between gap-4">
-          <Link to="/problems" className="text-sm text-neutral-400 hover:text-neutral-200">
+          <Link
+            to="/problems"
+            search={search}
+            className="text-sm text-neutral-400 hover:text-neutral-200"
+          >
             ← Back to the library
           </Link>
           <div className="flex items-center gap-2">
@@ -205,6 +210,7 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
                   key={solution.id}
                   to="/problems/$problemId/$solutionId"
                   params={{ problemId: problem.id, solutionId: solution.id }}
+                  search={search}
                   className="group flex items-center justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 hover:border-emerald-500"
                 >
                   <div className="min-w-0">

@@ -1,10 +1,11 @@
-import type { Attempt, BestScore, Problem } from "../types";
+import type { Attempt, BestScore, Mode, Problem, Settings } from "../types";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const KEY_VERSION = "ct:v";
 const KEY_ATTEMPTS = "ct:attempts";
 const KEY_BEST = "ct:best";
 const KEY_CUSTOM = "ct:problems:custom";
+const KEY_SETTINGS = "ct:settings";
 // Edits to a *bundled* Problem are stored as a full-Problem override keyed by id
 // (it lives in source, so we shadow it rather than mutate it); deletions of a
 // bundled Problem are tombstones — its id in a hidden list. Custom Problems need
@@ -50,22 +51,36 @@ export function recentAttemptsForProblem(problemId: string, limit = 5): Attempt[
 }
 
 function loadBestScores(): BestScore[] {
-  return read<BestScore[]>(KEY_BEST, []);
+  // Scores written before Mode selection existed belong to Copy mode.
+  return read<Array<BestScore | Omit<BestScore, "mode">>>(KEY_BEST, []).map((score) => ({
+    ...score,
+    mode: "mode" in score ? score.mode : "copy",
+  }));
 }
 
-export function bestFor(problemId: string, solutionId: string): BestScore | undefined {
-  return loadBestScores().find((b) => b.problemId === problemId && b.solutionId === solutionId);
+export function bestFor(
+  problemId: string,
+  solutionId: string,
+  mode: Mode = "copy",
+): BestScore | undefined {
+  return loadBestScores().find(
+    (b) => b.problemId === problemId && b.solutionId === solutionId && b.mode === mode,
+  );
 }
 
 function updateBest(attempt: Attempt): void {
   const scores = loadBestScores();
   const existing = scores.find(
-    (b) => b.problemId === attempt.problemId && b.solutionId === attempt.solutionId,
+    (b) =>
+      b.problemId === attempt.problemId &&
+      b.solutionId === attempt.solutionId &&
+      b.mode === attempt.mode,
   );
   if (existing === undefined) {
     scores.push({
       problemId: attempt.problemId,
       solutionId: attempt.solutionId,
+      mode: attempt.mode,
       bestCpm: attempt.cpm,
     });
   } else if (attempt.cpm > existing.bestCpm) {
@@ -79,6 +94,16 @@ export function saveAttempt(attempt: Attempt): void {
   attempts.push(attempt);
   write(KEY_ATTEMPTS, attempts);
   updateBest(attempt);
+}
+
+const DEFAULT_SETTINGS: Settings = { mode: "copy", distractionFree: false };
+
+export function loadSettings(): Settings {
+  return { ...DEFAULT_SETTINGS, ...read<Partial<Settings>>(KEY_SETTINGS, {}) };
+}
+
+export function saveSettings(settings: Settings): void {
+  write(KEY_SETTINGS, settings);
 }
 
 export function loadCustomProblems(): Problem[] {

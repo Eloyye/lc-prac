@@ -58,5 +58,11 @@ export interface Attempt {
 export interface BestScore {
   problemId: string;
   solutionId: string;
+  mode: Mode;
   bestCpm: number;
+}
+
+export interface Settings {
+  mode: Mode;
+  distractionFree: boolean;
 }
