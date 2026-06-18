@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import type { Example, Problem, Solution } from "../types";
+import type { Example, Problem, Solution } from "@shared/types";
 
 interface ProblemDialogProps {
   onClose: () => void;

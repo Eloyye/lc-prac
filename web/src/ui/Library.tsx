@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useLibrary } from "../store/library";
-import { allTags, filterProblems } from "../content/filter";
-import type { DifficultyFilter } from "../content/filter";
+import { allTags, filterProblems } from "@shared/content/filter";
+import type { DifficultyFilter } from "@shared/content/filter";
 import { usePreferences } from "../store/preferences";
 import { ProblemCard } from "./ProblemCard";
 import { ProblemDialog } from "./ProblemDialog";

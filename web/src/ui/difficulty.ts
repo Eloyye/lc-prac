@@ -1,4 +1,4 @@
-import type { Problem } from "../types";
+import type { Problem } from "@shared/types";
 
 /** Tailwind text-color class per Problem difficulty, shared across the Library UI. */
 export const DIFFICULTY_COLOR: Record<Problem["difficulty"], string> = {

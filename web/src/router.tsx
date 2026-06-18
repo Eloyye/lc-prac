@@ -12,8 +12,8 @@ import {
   useParams,
   useSearch,
 } from "@tanstack/react-router";
-import type { LibrarySearch } from "./content/filter";
-import { nextPracticeTarget } from "./content/next";
+import type { LibrarySearch } from "@shared/content/filter";
+import { nextPracticeTarget } from "@shared/content/next";
 import { initStorage } from "./persistence/storage";
 import { resolveProblem, resolveSession, useLibrary } from "./store/library";
 import { Library } from "./ui/Library";

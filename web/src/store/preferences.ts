@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { loadSettings, saveSettings } from "../persistence/storage";
-import type { Mode, Settings } from "../types";
+import type { Mode, Settings } from "@shared/types";
 
 interface PreferencesState extends Settings {
   paletteOpen: boolean;

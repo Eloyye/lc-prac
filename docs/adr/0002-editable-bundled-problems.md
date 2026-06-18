@@ -11,7 +11,7 @@ Solution, retitle, add an approach) and remove Problems they don't care about â€
 Problem detail page, the same way they manage custom ones. This reverses the read-only
 stance recorded in [CONTEXT.md](../../CONTEXT.md).
 
-Bundled Problems live in source (`src/content/problems.ts`, `PROBLEMS`), so they can't be
+Bundled Problems live in source (`shared/content/problems.ts`, `PROBLEMS`), so they can't be
 mutated or removed at runtime. We add a **local override + tombstone layer** in
 `localStorage` and resolve it when building the merged Library.
 
@@ -28,7 +28,7 @@ mutated or removed at runtime. We add a **local override + tombstone layer** in
 - **Custom Problems are unchanged**: they live entirely in `ct:problems:custom` and are
   edited (upsert) or removed there.
 
-The merge is a pure `mergedLibrary(bundled)` in `src/persistence/storage.ts` (unit-tested
+The merge is a pure `mergedLibrary(bundled)` in `web/src/persistence/storage.ts` (unit-tested
 without importing the bundled content); the store routes an edit/delete to the override or
 custom store by whether the id is a bundled one.
 

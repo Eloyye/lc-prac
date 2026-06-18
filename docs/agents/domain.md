@@ -19,7 +19,9 @@ Single-context repo:
 ├── docs/adr/
 │   ├── 0001-some-decision.md
 │   └── 0002-another-decision.md
-└── src/
+├── web/
+├── server/
+└── shared/
 ```
 
 ## Use the glossary's vocabulary

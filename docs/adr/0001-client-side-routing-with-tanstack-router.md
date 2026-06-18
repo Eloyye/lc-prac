@@ -37,7 +37,7 @@ deliberately not a reloadable URL.
   `validateSearch` make the filter query string the natural, validated source of truth.
 
 We deliberately use **code-based** routes (no `@tanstack/router-plugin` codegen, no
-`src/routes/` file convention, no generated `routeTree.gen.ts`) to keep the route tree
+`web/src/routes/` file convention, no generated `routeTree.gen.ts`) to keep the route tree
 explicit and dependency-light.
 
 ## Consequences

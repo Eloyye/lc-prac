@@ -27,7 +27,7 @@ Browser (SPA)
 ├─ Store (Zustand): session · problem · settings
 ├─ ProblemRepository: bundled JSON ∪ localStorage(custom)
 ├─ Persistence: localStorage (attempts · best · custom · settings)
-└─ LSP client (src/editor/lsp.ts) ◄─JSON-RPC/WebSocket(/lsp)─► Vite plugin → pyright-langserver (node)
+└─ LSP client (web/src/editor/lsp.ts) ◄─JSON-RPC/WebSocket(/lsp)─► Vite plugin → pyright-langserver (node)
 ```
 
 **Session data flow:** select problem → load `target` into engine + panes → keystroke → Monaco change event → engine diff → update decorations + HUD → on exact match → Results → persist attempt/PB.
@@ -93,7 +93,7 @@ function reduce(s: EngineState, e: EngineEvent): EngineState; // pure
 - **Decorations** via `createDecorationsCollection`; recompute only the changed region per change (NFR-1).
 - **Caret**: built-in `cursorSmoothCaretAnimation`, gated on `prefers-reduced-motion`.
 - **Color-blind safety**: errors = red **+ underline**, never hue alone (NFR-7).
-- **IntelliSense (FR-8)**: a hand-written adapter (`src/editor/lsp.ts`) maps Monaco completion/hover/signature providers and diagnostics to a pyright LSP connection over WebSocket (a Vite plugin in `vite.config.ts` serves `/lsp` and spawns `pyright-langserver --stdio`). Practice documents live in a narrow virtual workspace and use open-file analysis, so diagnostics arrive without a project scan. Connects lazily and degrades gracefully when the LSP is unreachable. Distraction-free mode silences providers and markers without interrupting document sync.
+- **IntelliSense (FR-8)**: a hand-written adapter (`web/src/editor/lsp.ts`) maps Monaco completion/hover/signature providers and diagnostics to a pyright LSP connection over WebSocket (a Vite plugin in `vite.config.ts` serves `/lsp` and spawns `pyright-langserver --stdio`). Practice documents live in a narrow virtual workspace and use open-file analysis, so diagnostics arrive without a project scan. Connects lazily and degrades gracefully when the LSP is unreachable. Distraction-free mode silences providers and markers without interrupting document sync.
 
 ---
 
@@ -238,13 +238,16 @@ Engineering decisions (product decisions in PRD §15).
 ## 13. Directory layout
 
 ```
-src/
+web/src/
   typing-engine/    # pure logic + tests
   editor/           # monaco setup, decorations, lsp
   store/
-  content/problems/ # bundled JSON/TS
   persistence/
   ui/
+shared/             # framework-agnostic domain core (imported by web + server)
+  types.ts
+  content/          # bundled problems + filtering + next-target
+server/             # Hono API, db, lsp (serves the SPA in production)
 # pyright LSP is a Vite plugin (vite.config.ts) — no separate dir
 docs/  PRD.md  TECH_SPEC.md
 ```

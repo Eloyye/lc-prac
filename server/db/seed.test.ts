@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { PROBLEMS } from "../../src/content/problems";
+import { PROBLEMS } from "../../shared/content/problems";
 import { getProblem, listProblems } from "../services/problems";
 import { openDatabase } from "./client";
 import type { DbConnection } from "./client";

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import type { Attempt, Problem } from "../types";
+import type { Attempt, Problem } from "@shared/types";
 import {
   bestFor,
   clearOverride,

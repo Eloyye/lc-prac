@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import type { Example, Problem, Solution } from "../../src/types";
-import { filterProblems } from "../../src/content/filter";
+import type { Example, Problem, Solution } from "../../shared/types";
+import { filterProblems } from "../../shared/content/filter";
 import type { Db } from "../db/client";
 import { problemExamples, problems, problemTags, solutions, tags } from "../db/schema";
 import type { ProblemExampleRow, ProblemRow, SolutionRow } from "../db/schema";

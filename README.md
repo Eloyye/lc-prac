@@ -84,20 +84,25 @@ Configuration is validated at startup and fails fast with an actionable message
 ## Layout
 
 ```
-vite.config.ts     mounts the shared pyright LSP in development and proxies
-                   /api to the Hono server
+vite.config.ts     root-level Vite app config (rooted at web/) that doubles as
+                   the repo-wide Vitest config; mounts the shared pyright LSP in
+                   development and proxies /api to the Hono server
 drizzle/           generated SQL migrations + snapshot metadata
+shared/            framework-agnostic domain core, imported by web and server
+  types.ts         Problem/Solution/Example/Attempt/Settings domain types
+  content/         bundled problems (seed source) + filtering + next-target
 server/            production app server (Hono): /api/health, /api/problems, /lsp,
                    request logging, env validation, static + SPA fallback (index.ts)
   db/              Drizzle schema, client (pragmas), migrate, seed (bundled content)
   services/        problem read model + DTO mapping
   routes/          health, problems (list/detail, filters)
-src/
-  typing-engine/   pure logic (diff, metrics, indent) + unit tests
-  editor/          Monaco setup, decorations, editors, LSP client (lsp.ts)
-  api/             typed browser API client (problems)
-  store/           Zustand session + library state (async, API-backed)
-  content/         bundled problems (seed source) + filtering
-  persistence/     localStorage wrapper (attempts, best scores, custom problems)
-  ui/              Library, ProblemCard, ImportDialog, SessionView, Hud, Results
+web/               frontend app (Vite root); imports the domain core via @shared/*
+  index.html       Vite HTML entry
+  src/
+    typing-engine/ pure logic (diff, metrics, indent) + unit tests
+    editor/        Monaco setup, decorations, editors, LSP client (lsp.ts)
+    api/           typed browser API client (problems)
+    store/         Zustand session + library state (async, API-backed)
+    persistence/   localStorage wrapper (attempts, best scores, custom problems)
+    ui/            Library, ProblemCard, ImportDialog, SessionView, Hud, Results
 ```
