@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
+import { createAuth } from "./auth";
 import { openDatabase } from "./db/client";
 import { runMigrations } from "./db/migrate";
 import { EnvError, parseEnv } from "./env";
@@ -42,7 +43,13 @@ try {
 // runs from <repo>/server.
 const staticRoot = fileURLToPath(new URL("../dist", import.meta.url));
 
-const app = createApp({ logger, db, staticRoot });
+const auth = createAuth({
+  db,
+  baseURL: env.PUBLIC_APP_URL,
+  secret: env.BETTER_AUTH_SECRET,
+  secureCookies: env.NODE_ENV === "production",
+});
+const app = createApp({ logger, auth, db, staticRoot });
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   logger.info({ port: info.port, nodeEnv: env.NODE_ENV }, "server listening");

@@ -1,16 +1,21 @@
 import { Hono } from "hono";
 import type { Logger } from "pino";
+import type { Auth } from "./auth";
 import type { Db } from "./db/client";
 import { requestLogger } from "./middleware/request-logger";
 import type { RequestLoggerVariables } from "./middleware/request-logger";
+import { sessionContext } from "./middleware/session";
+import type { AuthVariables } from "./middleware/session";
 import { health } from "./routes/health";
+import { me } from "./routes/me";
 import { createProblemsRouter } from "./routes/problems";
 import { createStaticSpa } from "./static";
 
-export type AppVariables = RequestLoggerVariables;
+export type AppVariables = RequestLoggerVariables & AuthVariables;
 
 export type CreateAppOptions = {
   logger: Logger;
+  auth?: Auth;
   /**
    * Drizzle database for the Problem Library API. When provided, the
    * `/api/problems` routes are mounted. Tests pass a migrated temporary
@@ -36,8 +41,15 @@ export function createApp(options: CreateAppOptions) {
   // Must be first so every request — matched, 404, or errored — is logged and
   // assigned a request id before any other handler runs.
   app.use("*", requestLogger(options.logger));
+  app.use("*", sessionContext(options.auth));
+
+  const auth = options.auth;
+  if (auth !== undefined) {
+    app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+  }
 
   app.route("/api", health);
+  app.route("/api/me", me);
   if (options.db !== undefined) {
     app.route("/api/problems", createProblemsRouter(options.db));
   }

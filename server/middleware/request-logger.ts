@@ -4,6 +4,7 @@ import type { Logger } from "pino";
 
 export type RequestLoggerVariables = {
   requestId: string;
+  userId: string | null;
 };
 
 /**
@@ -20,6 +21,7 @@ export function requestLogger(logger: Logger) {
     const start = performance.now();
     const requestId = randomUUID();
     c.set("requestId", requestId);
+    c.set("userId", null);
     c.header("x-request-id", requestId);
 
     let caughtError: unknown;
@@ -39,6 +41,7 @@ export function requestLogger(logger: Logger) {
       const status = routeError !== undefined && c.res.status < 400 ? 500 : c.res.status;
       const event = {
         requestId,
+        ...(c.var.userId === null ? {} : { userId: c.var.userId }),
         method: c.req.method,
         path: new URL(c.req.url).pathname,
         status,

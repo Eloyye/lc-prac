@@ -22,6 +22,7 @@ import { ProblemDetail } from "./ui/ProblemDetail";
 import { SessionView } from "./ui/SessionView";
 import { SettingsDialog } from "./ui/SettingsDialog";
 import { Stats } from "./ui/Stats";
+import { AccountControl } from "./ui/AccountControl";
 
 /**
  * Search-param schema for the Library route. Defaults are encoded as "absent"
@@ -53,6 +54,7 @@ function RootLayout() {
       <Outlet />
       <CommandPalette />
       <SettingsDialog />
+      <AccountControl />
     </>
   );
 }

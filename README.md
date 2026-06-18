@@ -6,9 +6,10 @@ your speed and accuracy. See [docs/PRD.md](docs/PRD.md) and
 [docs/TECH_SPEC.md](docs/TECH_SPEC.md).
 
 **Status:** Phase 1 in progress. A curated Python problem set with browse/filter
-and custom import; Copy-mode typing with char-by-char feedback, auto-indent, live
-HUD, results, and local persistence. IntelliSense (completion, hover, signature
-help, and diagnostics via pyright) is built into development and production.
+and custom import; email/password accounts with persistent sessions; Copy-mode
+typing with char-by-char feedback, auto-indent, live HUD, results, and local
+persistence. IntelliSense (completion, hover, signature help, and diagnostics
+via pyright) is built into development and production.
 
 ## Quickstart
 
@@ -53,12 +54,12 @@ install is required. `vite preview` does not include the LSP.
 
 `pnpm build` compiles the client to `dist/`; `pnpm start` runs the Hono server
 (`server/index.ts` via tsx). One process serves the built SPA, the `/api`
-surface (`GET /api/health`, the `GET /api/problems` Library API), `/lsp`, and
-the client-routing fallback so deep links like `/problems/two-sum` resolve on
-direct load and refresh. Every HTTP request gets an `x-request-id`; HTTP and LSP
-lifecycle logs are structured Pino output (JSON in production, pretty in dev)
-and never include bodies, cookies, auth headers, solution code, document text,
-or JSON-RPC payloads.
+surface (health, Better Auth, current identity, and the Problem Library), `/lsp`,
+and the client-routing fallback so deep links like `/problems/two-sum` resolve
+on direct load and refresh. Every HTTP request gets an `x-request-id`; HTTP and
+LSP lifecycle logs are structured Pino output (JSON in production, pretty in
+dev) and never include bodies, cookies, auth headers, solution code, document
+text, or JSON-RPC payloads.
 
 The Library is database-backed: bundled Problems live in SQLite (Drizzle ORM
 over `better-sqlite3`), not in the client bundle. The server applies migrations
@@ -80,6 +81,7 @@ Configuration is validated at startup and fails fast with an actionable message
 | `LSP_MAX_CONNECTIONS_PER_IP` | `2`                       | Concurrent Pyright cap per remote IP    |
 | `LSP_IDLE_TIMEOUT_MS`        | `900000`                  | Idle socket/process lifetime            |
 | `DB_FILE_NAME`               | `./data/codetype.sqlite`  | SQLite file; required in production     |
+| `BETTER_AUTH_SECRET`         | Development-only value    | 32+ chars; required in production       |
 
 ## Layout
 
