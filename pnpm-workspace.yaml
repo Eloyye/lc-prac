@@ -1,0 +1,5 @@
+# pnpm requires build scripts to be explicitly approved. esbuild (a tsx
+# dependency, used to run the server) links its platform-native binary in a
+# postinstall step, so it is allowed to build here.
+allowBuilds:
+  esbuild: true
