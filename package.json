@@ -18,6 +18,8 @@
   },
   "dependencies": {
     "@tanstack/react-router": "^1.170.15",
+    "dompurify": "^3.2.7",
+    "marked": "^14.0.0",
     "monaco-editor": "^0.55.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

@@ -11,6 +11,12 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.170.15
         version: 1.170.15(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      dompurify:
+        specifier: ^3.2.7
+        version: 3.2.7
+      marked:
+        specifier: ^14.0.0
+        version: 14.0.0
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1

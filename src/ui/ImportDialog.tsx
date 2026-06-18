@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import type { Problem } from "../types";
+import type { Example, Problem } from "../types";
 
 interface ImportDialogProps {
   onClose: () => void;
@@ -19,14 +19,37 @@ export function ImportDialog({ onClose, onAdd }: ImportDialogProps) {
   const [tags, setTags] = useState("");
   const [approach, setApproach] = useState("");
   const [url, setUrl] = useState("");
+  const [statement, setStatement] = useState("");
+  const [expectedTime, setExpectedTime] = useState("");
+  const [expectedSpace, setExpectedSpace] = useState("");
+  const [examples, setExamples] = useState<Example[]>([]);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const addExample = (): void =>
+    setExamples((xs) => [...xs, { input: "", output: "", explanation: "" }]);
+  const removeExample = (index: number): void =>
+    setExamples((xs) => xs.filter((_, i) => i !== index));
+  const updateExample = (index: number, key: keyof Example, value: string): void =>
+    setExamples((xs) => xs.map((ex, i) => (i === index ? { ...ex, [key]: value } : ex)));
+
+  const optional = (value: string): string | undefined =>
+    value.trim() === "" ? undefined : value.trim();
 
   const submit = (): void => {
     if (title.trim() === "" || code.trim() === "") {
       setError("Title and code are required.");
       return;
     }
+    // Drop blank rows and empty explanations so optional Example fields stay
+    // absent rather than persisting empty strings; an Example needs both sides.
+    const cleanedExamples = examples.flatMap((ex): Example[] => {
+      const input = ex.input.trim();
+      const output = ex.output.trim();
+      if (input === "" || output === "") return [];
+      const explanation = ex.explanation?.trim() ?? "";
+      return [explanation === "" ? { input, output } : { input, output, explanation }];
+    });
     onAdd({
       id: crypto.randomUUID(),
       title: title.trim(),
@@ -35,8 +58,12 @@ export function ImportDialog({ onClose, onAdd }: ImportDialogProps) {
         .split(",")
         .map((t) => t.trim())
         .filter((t) => t !== ""),
-      url: url.trim() === "" ? undefined : url.trim(),
+      url: optional(url),
       origin: "custom",
+      statement: optional(statement),
+      expectedTime: optional(expectedTime),
+      expectedSpace: optional(expectedSpace),
+      examples: cleanedExamples.length > 0 ? cleanedExamples : undefined,
       solutions: [
         {
           id: crypto.randomUUID(),
@@ -104,6 +131,84 @@ export function ImportDialog({ onClose, onAdd }: ImportDialogProps) {
             placeholder="https://…"
           />
         </Field>
+
+        <Field label="Description (optional, markdown)">
+          <textarea
+            className={`${inputClass} h-24 resize-none`}
+            value={statement}
+            onChange={(e) => setStatement(e.target.value)}
+            placeholder={"Given an array `nums`, return…"}
+          />
+        </Field>
+
+        <div className="flex gap-3">
+          <Field label="Target time (optional)">
+            <input
+              className={inputClass}
+              value={expectedTime}
+              onChange={(e) => setExpectedTime(e.target.value)}
+              placeholder="O(n)"
+            />
+          </Field>
+          <Field label="Target space (optional)">
+            <input
+              className={inputClass}
+              value={expectedSpace}
+              onChange={(e) => setExpectedSpace(e.target.value)}
+              placeholder="O(1)"
+            />
+          </Field>
+        </div>
+
+        <div className="flex flex-col gap-1.5 text-left">
+          <span className="text-xs uppercase tracking-wide text-neutral-500">
+            Examples (optional)
+          </span>
+          {examples.map((example, index) => (
+            <div
+              key={index}
+              className="flex flex-col gap-1.5 rounded-lg border border-neutral-800 p-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-neutral-500">Example {index + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => removeExample(index)}
+                  className="text-xs text-neutral-500 hover:text-red-400"
+                >
+                  Remove
+                </button>
+              </div>
+              <input
+                className={`${inputClass} font-mono`}
+                value={example.input}
+                onChange={(e) => updateExample(index, "input", e.target.value)}
+                placeholder="Input — nums = [1, 2, 3]"
+                spellCheck={false}
+              />
+              <input
+                className={`${inputClass} font-mono`}
+                value={example.output}
+                onChange={(e) => updateExample(index, "output", e.target.value)}
+                placeholder="Output — 6"
+                spellCheck={false}
+              />
+              <input
+                className={inputClass}
+                value={example.explanation ?? ""}
+                onChange={(e) => updateExample(index, "explanation", e.target.value)}
+                placeholder="Explanation (optional)"
+              />
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addExample}
+            className="self-start rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:border-neutral-500"
+          >
+            + Add example
+          </button>
+        </div>
 
         <Field label="Python solution">
           <textarea

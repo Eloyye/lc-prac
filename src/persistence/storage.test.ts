@@ -4,6 +4,7 @@ import {
   bestFor,
   deleteCustomProblem,
   loadAttempts,
+  loadCustomProblems,
   recentAttemptsForProblem,
   saveAttempt,
   saveCustomProblem,
@@ -86,6 +87,32 @@ describe("deleteCustomProblem", () => {
     // p2's history is left untouched.
     expect(loadAttempts().map((a) => a.id)).toEqual(["a3"]);
     expect(bestFor("p2", "p2-s")?.bestCpm).toBe(150);
+  });
+});
+
+describe("saveCustomProblem", () => {
+  it("round-trips the statement, target bounds, and examples", () => {
+    const problem: Problem = {
+      id: "p1",
+      title: "Array Sum",
+      difficulty: "easy",
+      tags: ["array"],
+      origin: "custom",
+      statement: "Given `nums`, return the **sum**.",
+      expectedTime: "O(n)",
+      expectedSpace: "O(1)",
+      // One example with an explanation, one without — to confirm the optional
+      // field survives the round-trip in both shapes.
+      examples: [
+        { input: "nums = [1, 2]", output: "3", explanation: "1 + 2 = 3." },
+        { input: "nums = []", output: "0" },
+      ],
+      solutions: [{ id: "p1-s", lang: "python", approach: "Loop", code: "pass" }],
+    };
+
+    saveCustomProblem(problem);
+
+    expect(loadCustomProblems()).toEqual([problem]);
   });
 });
 

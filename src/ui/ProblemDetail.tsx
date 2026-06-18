@@ -2,6 +2,9 @@ import { Link } from "@tanstack/react-router";
 import type { Mode, Problem, Solution } from "../types";
 import { bestFor, recentAttemptsForProblem } from "../persistence/storage";
 import { DIFFICULTY_COLOR } from "./difficulty";
+import { Markdown } from "./Markdown";
+
+const sectionHeading = "mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500";
 
 // Display label per Mode. Only Copy is wired today (every Attempt is hardcoded to
 // it); Recall and Free are listed so the mode-aware PB/Attempt UI below needs no
@@ -64,10 +67,77 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
           )}
         </header>
 
+        {problem.statement !== undefined && (
+          <section className="mb-8">
+            <h2 className={sectionHeading}>Description</h2>
+            <Markdown source={problem.statement} />
+          </section>
+        )}
+
+        {(problem.expectedTime !== undefined || problem.expectedSpace !== undefined) && (
+          <section className="mb-8">
+            <h2 className={sectionHeading}>Requirements</h2>
+            {/* Problem-level *targets* the solver should aim for — distinct from
+                each Approach's measured complexity shown below. */}
+            <div className="flex flex-wrap gap-2 text-sm">
+              {problem.expectedTime !== undefined && (
+                <span className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5">
+                  <span className="text-neutral-500">Target time </span>
+                  <span className="font-mono text-neutral-200">{problem.expectedTime}</span>
+                </span>
+              )}
+              {problem.expectedSpace !== undefined && (
+                <span className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5">
+                  <span className="text-neutral-500">Target space </span>
+                  <span className="font-mono text-neutral-200">{problem.expectedSpace}</span>
+                </span>
+              )}
+            </div>
+          </section>
+        )}
+
+        {problem.examples !== undefined && problem.examples.length > 0 && (
+          <section className="mb-8">
+            <h2 className={sectionHeading}>Examples</h2>
+            <div className="flex flex-col gap-3">
+              {problem.examples.map((example, index) => (
+                <div
+                  key={index}
+                  className="rounded-xl border border-neutral-800 bg-neutral-900 p-4"
+                >
+                  <div className="mb-2 text-xs font-medium text-neutral-400">
+                    Example {index + 1}
+                  </div>
+                  <dl className="flex flex-col gap-2 text-sm">
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-neutral-500">Input</dt>
+                      <dd className="mt-1 overflow-auto whitespace-pre-wrap font-mono text-neutral-200">
+                        {example.input}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-neutral-500">Output</dt>
+                      <dd className="mt-1 overflow-auto whitespace-pre-wrap font-mono text-neutral-200">
+                        {example.output}
+                      </dd>
+                    </div>
+                    {example.explanation !== undefined && (
+                      <div>
+                        <dt className="text-xs uppercase tracking-wide text-neutral-500">
+                          Explanation
+                        </dt>
+                        <dd className="mt-1 text-neutral-400">{example.explanation}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="mb-8">
-          <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">
-            Approaches
-          </h2>
+          <h2 className={sectionHeading}>Approaches</h2>
           <div className="flex flex-col gap-2">
             {problem.solutions.map((solution) => {
               const best = bestFor(problem.id, solution.id);
@@ -100,9 +170,7 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
         </section>
 
         <section>
-          <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">
-            Recent attempts
-          </h2>
+          <h2 className={sectionHeading}>Recent attempts</h2>
           {attempts.length === 0 ? (
             <p className="text-sm text-neutral-500">
               No attempts yet — pick an approach above to start a session.

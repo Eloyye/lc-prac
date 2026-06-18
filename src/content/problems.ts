@@ -285,4 +285,53 @@ export const PROBLEMS: Problem[] = [
       },
     ],
   },
+  // Original, self-authored content (not from LeetCode) so the statement and
+  // examples can ship bundled without tripping PRD §12 — and so the detail
+  // page's Description / Requirements / Examples surfaces have something to
+  // render out of the box. Bundled LeetCode Problems above stay link-out only.
+  {
+    id: "array-sum",
+    title: "Array Sum",
+    difficulty: "easy",
+    tags: ["array", "math"],
+    origin: "bundled",
+    statement:
+      "Given an array of integers `nums`, return the **sum** of all its elements.\n\nAn empty array sums to `0`.",
+    expectedTime: "O(n)",
+    expectedSpace: "O(1)",
+    examples: [
+      { input: "nums = [1, 2, 3]", output: "6", explanation: "1 + 2 + 3 = 6." },
+      {
+        input: "nums = [-2, 5, -1]",
+        output: "2",
+        explanation: "Negatives count too: -2 + 5 + -1 = 2.",
+      },
+      { input: "nums = []", output: "0", explanation: "An empty array sums to zero." },
+    ],
+    solutions: [
+      {
+        id: "array-sum-loop",
+        lang: "python",
+        approach: "Accumulator loop",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(1)",
+        code: `class Solution:
+    def arraySum(self, nums: list[int]) -> int:
+        total = 0
+        for n in nums:
+            total += n
+        return total`,
+      },
+      {
+        id: "array-sum-builtin",
+        lang: "python",
+        approach: "Built-in sum",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(1)",
+        code: `class Solution:
+    def arraySum(self, nums: list[int]) -> int:
+        return sum(nums)`,
+      },
+    ],
+  },
 ];
