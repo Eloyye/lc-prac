@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import type { Problem } from "../types";
+import type { Problem } from "@shared/types";
 import { bestFor } from "../persistence/storage";
-import type { LibrarySearch } from "../content/filter";
+import type { LibrarySearch } from "@shared/content/filter";
 import { DIFFICULTY_COLOR } from "./difficulty";
 
 interface ProblemCardProps {

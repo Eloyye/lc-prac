@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Problem, Solution } from "../types";
+import type { Problem, Solution } from "@shared/types";
 import { computeMetrics } from "../typing-engine";
 import { useSession } from "../store/session";
 import { usePreferences } from "../store/preferences";

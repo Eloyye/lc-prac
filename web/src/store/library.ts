@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Problem, Solution } from "../types";
+import type { Problem, Solution } from "@shared/types";
 import { listProblems } from "../api/problems";
 import {
   clearOverride,

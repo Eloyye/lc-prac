@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Problem } from "../types";
+import type { Problem } from "@shared/types";
 import type { ProblemListResponse } from "../api/problems";
 
 vi.mock("../api/problems", () => ({ listProblems: vi.fn() }));

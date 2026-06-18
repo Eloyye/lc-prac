@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Problem } from "../types";
+import type { Problem } from "@shared/types";
 import { ApiError } from "./client";
 import { getProblem, listProblems } from "./problems";
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { pino } from "pino";
-import { PROBLEMS } from "../../src/content/problems";
-import type { Problem } from "../../src/types";
+import { PROBLEMS } from "../../shared/content/problems";
+import type { Problem } from "../../shared/types";
 import { createApp } from "../app";
 import { openDatabase } from "../db/client";
 import type { DbConnection } from "../db/client";

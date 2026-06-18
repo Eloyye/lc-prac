@@ -3,7 +3,7 @@ import { Command } from "cmdk";
 import { useNavigate } from "@tanstack/react-router";
 import { useLibrary } from "../store/library";
 import { usePreferences } from "../store/preferences";
-import type { Mode } from "../types";
+import type { Mode } from "@shared/types";
 
 const MODE_LABEL: Record<Mode, string> = { copy: "Copy", recall: "Recall", free: "Free" };
 

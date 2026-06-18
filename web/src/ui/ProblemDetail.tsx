@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import type { Mode, Problem, Solution } from "../types";
+import type { Mode, Problem, Solution } from "@shared/types";
 import { bestFor, hasOverride, recentAttemptsForProblem } from "../persistence/storage";
 import { useLibrary } from "../store/library";
 import { DIFFICULTY_COLOR } from "./difficulty";

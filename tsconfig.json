@@ -16,7 +16,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "types": []
+    "types": [],
+    "paths": { "@shared/*": ["./shared/*"] }
   },
-  "include": ["src"]
+  "include": ["web/src", "shared"]
 }

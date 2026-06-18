@@ -1,4 +1,4 @@
-import type { Attempt, BestScore, Mode, Problem, Settings } from "../types";
+import type { Attempt, BestScore, Mode, Problem, Settings } from "@shared/types";
 
 const SCHEMA_VERSION = 2;
 const KEY_VERSION = "ct:v";

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { usePreferences } from "../store/preferences";
-import type { Mode } from "../types";
+import type { Mode } from "@shared/types";
 
 const MODES: Array<{ value: Mode; label: string; detail: string }> = [
   { value: "copy", label: "Copy", detail: "Keep the Reference visible" },

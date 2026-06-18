@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -6,6 +7,12 @@ import { parseEnv } from "./server/env";
 import { createLogger } from "./server/logger";
 import { createPyrightLspServer } from "./server/lsp";
 import type { PyrightLspServer } from "./server/lsp";
+
+// This config lives at the repo root (not in web/) because it doubles as the
+// single Vitest config for the whole repo and it imports the pyright LSP from
+// server/. `root` points Vite at the web/ app; test globs and the build output
+// are pinned to absolute repo paths so they're independent of Vite's `root`.
+const repoRoot = fileURLToPath(new URL(".", import.meta.url));
 
 function pyrightLsp(): Plugin {
   let lspServer: PyrightLspServer | undefined;
@@ -31,7 +38,20 @@ function pyrightLsp(): Plugin {
 }
 
 export default defineConfig({
+  // The Vite app/build is rooted at web/. Under Vitest we keep the repo root so
+  // node_modules (notably the native better-sqlite3 addon used by server tests)
+  // is externalized rather than transformed.
+  root: process.env.VITEST ? undefined : "web",
   plugins: [react(), tailwindcss(), pyrightLsp()],
+  resolve: {
+    alias: { "@shared": fileURLToPath(new URL("./shared", import.meta.url)) },
+  },
+  build: {
+    // Keep the build at repo-root dist/ so the Hono server's `../dist` static
+    // root (server/index.ts) keeps working without changes.
+    outDir: fileURLToPath(new URL("./dist", import.meta.url)),
+    emptyOutDir: true,
+  },
   server: {
     port: process.env.PORT ? Number(process.env.PORT) : undefined,
     // In development the client runs under Vite while the API runs under Hono
@@ -42,6 +62,10 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.{ts,tsx}", "server/**/*.test.{ts,tsx}"],
+    include: [
+      `${repoRoot}web/src/**/*.test.{ts,tsx}`,
+      `${repoRoot}server/**/*.test.{ts,tsx}`,
+      `${repoRoot}shared/**/*.test.{ts,tsx}`,
+    ],
   },
 });

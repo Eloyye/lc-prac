@@ -1,4 +1,4 @@
-import type { Problem } from "../types";
+import type { Problem } from "@shared/types";
 import { Markdown } from "./Markdown";
 
 type ProblemStatementPanelProps = Pick<Problem, "statement" | "url">;
