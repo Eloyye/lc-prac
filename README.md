@@ -8,7 +8,7 @@ your speed and accuracy. See [docs/PRD.md](docs/PRD.md) and
 **Status:** Phase 1 in progress. A curated Python problem set with browse/filter
 and custom import; Copy-mode typing with char-by-char feedback, auto-indent, live
 HUD, results, and local persistence. IntelliSense (completion, hover, signature
-help, and diagnostics via pyright) is built into `pnpm dev`.
+help, and diagnostics via pyright) is built into development and production.
 
 ## Quickstart
 
@@ -17,10 +17,10 @@ pnpm install   # also enables the git pre-commit hook (via core.hooksPath)
 pnpm dev       # app + pyright IntelliSense on http://localhost:5173 (or next free port)
 ```
 
-pyright runs inside the Vite dev server (a plugin in `vite.config.ts` serves it
-over WebSocket at `/lsp`), so there's no separate process or port. It needs the
-`pyright` npm package (a dev dependency — no Python install required).
-`vite preview` and production builds don't include the LSP.
+The shared server bridge mounts pyright over same-origin WebSocket `/lsp` in
+Vite development and the production application server, so there is no separate
+port. Each browser connection gets an isolated pyright child process; no Python
+install is required. `vite preview` does not include the LSP.
 
 ## Scripts
 
@@ -29,7 +29,7 @@ over WebSocket at `/lsp`), so there's no separate process or port. It needs the
 | `pnpm dev`                          | Vite dev server + pyright IntelliSense (on `/lsp`)  |
 | `pnpm dev:server`                   | Hono API server alone (tsx watch, on `PORT`)        |
 | `pnpm build`                        | Type-check, then build the client for production    |
-| `pnpm start`                        | Run the production server (serves `dist/` + `/api`) |
+| `pnpm start`                        | Run production (`dist/`, `/api`, and `/lsp`)        |
 | `pnpm typecheck`                    | `tsc --noEmit` over app + node/server configs       |
 | `pnpm lint`                         | oxlint                                              |
 | `pnpm format` / `pnpm format:check` | oxfmt (write / check)                               |
@@ -48,28 +48,31 @@ over WebSocket at `/lsp`), so there's no separate process or port. It needs the
 
 `pnpm build` compiles the client to `dist/`; `pnpm start` runs the Hono server
 (`server/index.ts` via tsx). One process serves the built SPA, the `/api`
-surface (currently `GET /api/health`), and the client-routing fallback so deep
-links like `/problems/two-sum` resolve on direct load and refresh. Every request
-gets an `x-request-id` and emits one structured Pino log (JSON in production,
-pretty in dev); request logs never include bodies, cookies, auth headers, or
-solution code.
+surface (currently `GET /api/health`), `/lsp`, and the client-routing fallback
+so deep links like `/problems/two-sum` resolve on direct load and refresh. Every
+HTTP request gets an `x-request-id`; HTTP and LSP lifecycle logs are structured
+Pino output (JSON in production, pretty in dev) and never include bodies,
+cookies, auth headers, solution code, document text, or JSON-RPC payloads.
 
 Configuration is validated at startup and fails fast with an actionable message
 (see [`server/env.ts`](server/env.ts)):
 
-| Variable         | Default (dev)             | Notes                                   |
-| ---------------- | ------------------------- | --------------------------------------- |
-| `NODE_ENV`       | `development`             | `development` \| `production` \| `test` |
-| `PORT`           | `3000`                    | 1–65535                                 |
-| `LOG_LEVEL`      | `info` (`silent` in test) | Pino level                              |
-| `PUBLIC_APP_URL` | `http://localhost:$PORT`  | Required in production                  |
+| Variable                     | Default (dev)             | Notes                                   |
+| ---------------------------- | ------------------------- | --------------------------------------- |
+| `NODE_ENV`                   | `development`             | `development` \| `production` \| `test` |
+| `PORT`                       | `3000`                    | 1–65535                                 |
+| `LOG_LEVEL`                  | `info` (`silent` in test) | Pino level                              |
+| `PUBLIC_APP_URL`             | `http://localhost:$PORT`  | Required in production; allowed Origin  |
+| `LSP_MAX_CONNECTIONS`        | `20`                      | Global concurrent Pyright cap           |
+| `LSP_MAX_CONNECTIONS_PER_IP` | `2`                       | Concurrent Pyright cap per remote IP    |
+| `LSP_IDLE_TIMEOUT_MS`        | `900000`                  | Idle socket/process lifetime            |
 
 ## Layout
 
 ```
-vite.config.ts     hosts the pyright LSP over WebSocket at /lsp (dev only)
+vite.config.ts     mounts the shared pyright LSP capability in Vite development
 server/            production app server (Hono): /api/health, request logging,
-                   env validation, static + SPA-fallback serving (entry index.ts)
+                   /lsp, env validation, static + SPA fallback (entry index.ts)
 src/
   typing-engine/   pure logic (diff, metrics, indent) + unit tests
   editor/          Monaco setup, decorations, editors, LSP client (lsp.ts)

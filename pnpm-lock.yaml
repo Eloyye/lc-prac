@@ -32,6 +32,9 @@ importers:
       pino:
         specifier: ^10.3.1
         version: 10.3.1
+      pyright:
+        specifier: ^1.1.410
+        version: 1.1.410
       react:
         specifier: ^19.2.7
         version: 19.2.7
@@ -47,6 +50,9 @@ importers:
       vscode-ws-jsonrpc:
         specifier: ^3.5.0
         version: 3.5.0
+      ws:
+        specifier: ^8.21.0
+        version: 8.21.0
       zustand:
         specifier: ^5.0.14
         version: 5.0.14(@types/react@19.2.17)(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))
@@ -78,9 +84,6 @@ importers:
       pino-pretty:
         specifier: ^13.1.3
         version: 13.1.3
-      pyright:
-        specifier: ^1.1.410
-        version: 1.1.410
       tailwindcss:
         specifier: ^4.3.1
         version: 4.3.1
@@ -93,9 +96,6 @@ importers:
       vitest:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@25.9.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))
-      ws:
-        specifier: ^8.21.0
-        version: 8.21.0
 
 packages:
 
