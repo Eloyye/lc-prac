@@ -2,12 +2,19 @@ import { describe, it, expect, beforeEach } from "vitest";
 import type { Attempt, Problem } from "../types";
 import {
   bestFor,
+  clearOverride,
   deleteCustomProblem,
+  hasOverride,
+  hideBundledProblem,
   loadAttempts,
   loadCustomProblems,
+  loadHidden,
+  loadOverrides,
+  mergedLibrary,
   recentAttemptsForProblem,
   saveAttempt,
   saveCustomProblem,
+  saveOverride,
 } from "./storage";
 
 // The test runtime is `node`, so there is no real localStorage — back it with
@@ -137,5 +144,71 @@ describe("recentAttemptsForProblem", () => {
     expect(recent).toHaveLength(5);
     expect(recent.map((a) => a.id)).toEqual(["a7", "a6", "a5", "a4", "a3"]);
     expect(recent.every((a) => a.problemId === "p1")).toBe(true);
+  });
+});
+
+describe("problem overrides", () => {
+  it("round-trips an override and clears it back to nothing", () => {
+    const edited: Problem = { ...makeProblem("two-sum"), title: "Two Sum (edited)" };
+
+    expect(hasOverride("two-sum")).toBe(false);
+
+    saveOverride(edited);
+    expect(hasOverride("two-sum")).toBe(true);
+    expect(loadOverrides()["two-sum"]).toEqual(edited);
+
+    clearOverride("two-sum");
+    expect(hasOverride("two-sum")).toBe(false);
+    expect(loadOverrides()).toEqual({});
+  });
+});
+
+describe("hideBundledProblem", () => {
+  it("tombstones the id, drops its override, and purges its history", () => {
+    saveOverride({ ...makeProblem("two-sum"), title: "edited" });
+    saveAttempt(makeAttempt("a1", "two-sum", "two-sum-s", 120));
+    saveAttempt(makeAttempt("a2", "p2", "p2-s", 150));
+
+    // Precondition: two-sum has an override and a derived best score.
+    expect(hasOverride("two-sum")).toBe(true);
+    expect(bestFor("two-sum", "two-sum-s")?.bestCpm).toBe(120);
+
+    hideBundledProblem("two-sum");
+
+    expect(loadHidden()).toEqual(["two-sum"]);
+    expect(hasOverride("two-sum")).toBe(false);
+    // two-sum's history is gone from both stores; p2's is untouched.
+    expect(loadAttempts().some((a) => a.problemId === "two-sum")).toBe(false);
+    expect(bestFor("two-sum", "two-sum-s")).toBeUndefined();
+    expect(loadAttempts().map((a) => a.id)).toEqual(["a2"]);
+    expect(bestFor("p2", "p2-s")?.bestCpm).toBe(150);
+  });
+
+  it("does not duplicate an already-hidden id", () => {
+    hideBundledProblem("two-sum");
+    hideBundledProblem("two-sum");
+    expect(loadHidden()).toEqual(["two-sum"]);
+  });
+});
+
+describe("mergedLibrary", () => {
+  // Stand-ins for the bundled PROBLEMS array; the merge is pure over this arg.
+  const bundled = [makeProblem("two-sum"), makeProblem("add-two")];
+
+  it("returns bundled then custom when there are no overrides or tombstones", () => {
+    saveCustomProblem(makeProblem("my-custom"));
+    expect(mergedLibrary(bundled).map((p) => p.id)).toEqual(["two-sum", "add-two", "my-custom"]);
+  });
+
+  it("shadows a bundled problem with its override, leaving siblings untouched", () => {
+    saveOverride({ ...makeProblem("two-sum"), title: "Two Sum (edited)" });
+    const merged = mergedLibrary(bundled);
+    expect(merged.find((p) => p.id === "two-sum")?.title).toBe("Two Sum (edited)");
+    expect(merged.find((p) => p.id === "add-two")?.title).toBe("Problem add-two");
+  });
+
+  it("filters out a tombstoned bundled problem", () => {
+    hideBundledProblem("two-sum");
+    expect(mergedLibrary(bundled).map((p) => p.id)).toEqual(["add-two"]);
   });
 });

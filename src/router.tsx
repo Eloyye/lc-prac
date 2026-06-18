@@ -9,6 +9,7 @@ import {
   redirect,
   useLoaderData,
   useNavigate,
+  useParams,
 } from "@tanstack/react-router";
 import type { DifficultyFilter } from "./content/filter";
 import { initStorage } from "./persistence/storage";
@@ -52,7 +53,13 @@ function NotFound() {
 }
 
 function ProblemPage() {
-  const { problem } = useLoaderData({ from: "/problems/$problemId" });
+  // Read the live Problem from the store rather than the one-shot loader data, so
+  // an in-place edit re-renders immediately. The loader still guards bad initial
+  // URLs with notFound(); after a delete the handler navigates away, so the brief
+  // "missing" render is expected.
+  const { problemId } = useParams({ from: "/problems/$problemId" });
+  const problem = useLibrary((s) => s.problems.find((p) => p.id === problemId));
+  if (problem === undefined) return null;
   return <ProblemDetail problem={problem} />;
 }
 

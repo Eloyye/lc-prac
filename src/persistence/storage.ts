@@ -5,6 +5,12 @@ const KEY_VERSION = "ct:v";
 const KEY_ATTEMPTS = "ct:attempts";
 const KEY_BEST = "ct:best";
 const KEY_CUSTOM = "ct:problems:custom";
+// Edits to a *bundled* Problem are stored as a full-Problem override keyed by id
+// (it lives in source, so we shadow it rather than mutate it); deletions of a
+// bundled Problem are tombstones — its id in a hidden list. Custom Problems need
+// neither: they live entirely in KEY_CUSTOM and are edited/removed there.
+const KEY_OVERRIDES = "ct:problems:overrides";
+const KEY_HIDDEN = "ct:problems:hidden";
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -90,14 +96,12 @@ export function saveCustomProblem(problem: Problem): void {
   write(KEY_CUSTOM, list);
 }
 
-export function deleteCustomProblem(id: string): void {
-  write(
-    KEY_CUSTOM,
-    loadCustomProblems().filter((p) => p.id !== id),
-  );
-  // Deleting the Problem deletes its history too: purge the Attempts and
-  // Personal Bests it owned so they can't dangle forever — or be silently
-  // inherited by a later import that reuses this id.
+/**
+ * Drop the Attempts and Personal Bests a Problem owned so they can't dangle
+ * forever — or be silently inherited by a later Problem that reuses this id.
+ * Shared by custom deletion and bundled hiding; both destroy the same history.
+ */
+function purgeProblemHistory(id: string): void {
   write(
     KEY_ATTEMPTS,
     loadAttempts().filter((a) => a.problemId !== id),
@@ -106,4 +110,68 @@ export function deleteCustomProblem(id: string): void {
     KEY_BEST,
     loadBestScores().filter((b) => b.problemId !== id),
   );
+}
+
+export function deleteCustomProblem(id: string): void {
+  write(
+    KEY_CUSTOM,
+    loadCustomProblems().filter((p) => p.id !== id),
+  );
+  // Deleting the Problem deletes its history too.
+  purgeProblemHistory(id);
+}
+
+export function loadOverrides(): Record<string, Problem> {
+  return read<Record<string, Problem>>(KEY_OVERRIDES, {});
+}
+
+/** Upsert a bundled Problem's override — the user-edited copy that shadows it. */
+export function saveOverride(problem: Problem): void {
+  const overrides = loadOverrides();
+  overrides[problem.id] = problem;
+  write(KEY_OVERRIDES, overrides);
+}
+
+/** Drop a bundled Problem's override, reverting it to the shipped version. */
+export function clearOverride(id: string): void {
+  const overrides = loadOverrides();
+  delete overrides[id];
+  write(KEY_OVERRIDES, overrides);
+}
+
+/** Whether a bundled Problem is currently shadowed by a user edit (gates "Reset"). */
+export function hasOverride(id: string): boolean {
+  return Object.hasOwn(loadOverrides(), id);
+}
+
+export function loadHidden(): string[] {
+  return read<string[]>(KEY_HIDDEN, []);
+}
+
+/**
+ * Tombstone a bundled Problem so the merged Library hides it. We also drop any
+ * override (a hidden Problem has no visible copy to edit) and purge its history,
+ * mirroring how deleting a custom Problem clears everything it owned.
+ */
+export function hideBundledProblem(id: string): void {
+  const hidden = loadHidden();
+  if (!hidden.includes(id)) {
+    hidden.push(id);
+    write(KEY_HIDDEN, hidden);
+  }
+  clearOverride(id);
+  purgeProblemHistory(id);
+}
+
+/**
+ * The merged Library: the given bundled Problems with overrides applied and
+ * tombstoned ones removed, followed by the user's custom Problems. Pure over the
+ * `bundled` arg (the store passes PROBLEMS) so the merge is unit-testable without
+ * the bundled content. Custom ids never collide with bundled ones (random UUIDs).
+ */
+export function mergedLibrary(bundled: Problem[]): Problem[] {
+  const overrides = loadOverrides();
+  const hidden = new Set(loadHidden());
+  const visibleBundled = bundled.filter((p) => !hidden.has(p.id)).map((p) => overrides[p.id] ?? p);
+  return [...visibleBundled, ...loadCustomProblems()];
 }
