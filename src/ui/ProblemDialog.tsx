@@ -1,29 +1,65 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import type { Example, Problem } from "../types";
+import type { Example, Problem, Solution } from "../types";
 
-interface ImportDialogProps {
+interface ProblemDialogProps {
   onClose: () => void;
-  onAdd: (problem: Problem) => void;
+  onSubmit: (problem: Problem) => void;
+  // When set, the dialog edits an existing Problem: fields are prefilled and its
+  // id + origin are preserved on submit. When absent, it creates a new custom one.
+  initial?: Problem;
 }
 
 type Difficulty = "easy" | "medium" | "hard";
 const DIFFICULTIES: Difficulty[] = ["easy", "medium", "hard"];
 
+// Editable form of a Solution: complexity is "" rather than undefined so the
+// inputs stay controlled, and the existing `id` rides along so edits keep the
+// Attempts/Personal Bests that point at it.
+interface SolutionDraft {
+  id: string;
+  approach: string;
+  timeComplexity: string;
+  spaceComplexity: string;
+  code: string;
+}
+
 const inputClass =
   "w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-neutral-500";
 
-export function ImportDialog({ onClose, onAdd }: ImportDialogProps) {
-  const [title, setTitle] = useState("");
-  const [difficulty, setDifficulty] = useState<Difficulty>("easy");
-  const [tags, setTags] = useState("");
-  const [approach, setApproach] = useState("");
-  const [url, setUrl] = useState("");
-  const [statement, setStatement] = useState("");
-  const [expectedTime, setExpectedTime] = useState("");
-  const [expectedSpace, setExpectedSpace] = useState("");
-  const [examples, setExamples] = useState<Example[]>([]);
-  const [code, setCode] = useState("");
+function toDraft(solution: Solution): SolutionDraft {
+  return {
+    id: solution.id,
+    approach: solution.approach,
+    timeComplexity: solution.timeComplexity ?? "",
+    spaceComplexity: solution.spaceComplexity ?? "",
+    code: solution.code,
+  };
+}
+
+function emptyDraft(): SolutionDraft {
+  return {
+    id: crypto.randomUUID(),
+    approach: "",
+    timeComplexity: "",
+    spaceComplexity: "",
+    code: "",
+  };
+}
+
+export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps) {
+  const editing = initial !== undefined;
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [difficulty, setDifficulty] = useState<Difficulty>(initial?.difficulty ?? "easy");
+  const [tags, setTags] = useState(initial ? initial.tags.join(", ") : "");
+  const [url, setUrl] = useState(initial?.url ?? "");
+  const [statement, setStatement] = useState(initial?.statement ?? "");
+  const [expectedTime, setExpectedTime] = useState(initial?.expectedTime ?? "");
+  const [expectedSpace, setExpectedSpace] = useState(initial?.expectedSpace ?? "");
+  const [examples, setExamples] = useState<Example[]>(initial?.examples ?? []);
+  const [solutions, setSolutions] = useState<SolutionDraft[]>(() =>
+    initial && initial.solutions.length > 0 ? initial.solutions.map(toDraft) : [emptyDraft()],
+  );
   const [error, setError] = useState<string | null>(null);
 
   const addExample = (): void =>
@@ -33,12 +69,37 @@ export function ImportDialog({ onClose, onAdd }: ImportDialogProps) {
   const updateExample = (index: number, key: keyof Example, value: string): void =>
     setExamples((xs) => xs.map((ex, i) => (i === index ? { ...ex, [key]: value } : ex)));
 
+  const addSolution = (): void => setSolutions((xs) => [...xs, emptyDraft()]);
+  // Keep at least one row so the form always has somewhere to type code.
+  const removeSolution = (id: string): void =>
+    setSolutions((xs) => (xs.length <= 1 ? xs : xs.filter((s) => s.id !== id)));
+  const updateSolution = (id: string, key: keyof SolutionDraft, value: string): void =>
+    setSolutions((xs) => xs.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
+
   const optional = (value: string): string | undefined =>
     value.trim() === "" ? undefined : value.trim();
 
   const submit = (): void => {
-    if (title.trim() === "" || code.trim() === "") {
-      setError("Title and code are required.");
+    // Drop rows with no code, keeping each kept row's id so history stays linked;
+    // an Approach defaults to "Custom" so a row is never left unlabelled.
+    const cleanedSolutions = solutions.flatMap((s): Solution[] => {
+      const code = s.code.replace(/\r\n/g, "\n").replace(/\s+$/, "");
+      if (code.trim() === "") return [];
+      const time = s.timeComplexity.trim();
+      const space = s.spaceComplexity.trim();
+      return [
+        {
+          id: s.id,
+          lang: "python",
+          approach: s.approach.trim() === "" ? "Custom" : s.approach.trim(),
+          ...(time === "" ? {} : { timeComplexity: time }),
+          ...(space === "" ? {} : { spaceComplexity: space }),
+          code,
+        },
+      ];
+    });
+    if (title.trim() === "" || cleanedSolutions.length === 0) {
+      setError("A title and at least one solution (with code) are required.");
       return;
     }
     // Drop blank rows and empty explanations so optional Example fields stay
@@ -50,8 +111,8 @@ export function ImportDialog({ onClose, onAdd }: ImportDialogProps) {
       const explanation = ex.explanation?.trim() ?? "";
       return [explanation === "" ? { input, output } : { input, output, explanation }];
     });
-    onAdd({
-      id: crypto.randomUUID(),
+    onSubmit({
+      id: initial?.id ?? crypto.randomUUID(),
       title: title.trim(),
       difficulty,
       tags: tags
@@ -59,19 +120,14 @@ export function ImportDialog({ onClose, onAdd }: ImportDialogProps) {
         .map((t) => t.trim())
         .filter((t) => t !== ""),
       url: optional(url),
-      origin: "custom",
+      // Editing preserves provenance: a bundled Problem stays bundled (its edit
+      // is stored as an override), a custom one stays custom.
+      origin: initial?.origin ?? "custom",
       statement: optional(statement),
       expectedTime: optional(expectedTime),
       expectedSpace: optional(expectedSpace),
       examples: cleanedExamples.length > 0 ? cleanedExamples : undefined,
-      solutions: [
-        {
-          id: crypto.randomUUID(),
-          lang: "python",
-          approach: approach.trim() === "" ? "Custom" : approach.trim(),
-          code: code.replace(/\r\n/g, "\n").replace(/\s+$/, ""),
-        },
-      ],
+      solutions: cleanedSolutions,
     });
     onClose();
   };
@@ -79,7 +135,9 @@ export function ImportDialog({ onClose, onAdd }: ImportDialogProps) {
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
       <div className="flex max-h-full w-full max-w-lg flex-col gap-3 overflow-auto rounded-xl border border-neutral-700 bg-neutral-900 p-6">
-        <h2 className="text-lg font-semibold text-neutral-100">Import a solution</h2>
+        <h2 className="text-lg font-semibold text-neutral-100">
+          {editing ? "Edit problem" : "Import a solution"}
+        </h2>
 
         <Field label="Title">
           <input
@@ -90,29 +148,19 @@ export function ImportDialog({ onClose, onAdd }: ImportDialogProps) {
           />
         </Field>
 
-        <div className="flex gap-3">
-          <Field label="Difficulty">
-            <select
-              className={inputClass}
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value as Difficulty)}
-            >
-              {DIFFICULTIES.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Approach">
-            <input
-              className={inputClass}
-              value={approach}
-              onChange={(e) => setApproach(e.target.value)}
-              placeholder="Hash map"
-            />
-          </Field>
-        </div>
+        <Field label="Difficulty">
+          <select
+            className={inputClass}
+            value={difficulty}
+            onChange={(e) => setDifficulty(e.target.value as Difficulty)}
+          >
+            {DIFFICULTIES.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </Field>
 
         <Field label="Tags (comma-separated)">
           <input
@@ -210,15 +258,64 @@ export function ImportDialog({ onClose, onAdd }: ImportDialogProps) {
           </button>
         </div>
 
-        <Field label="Python solution">
-          <textarea
-            className={`${inputClass} h-48 resize-none font-mono`}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder={"class Solution:\n    ..."}
-            spellCheck={false}
-          />
-        </Field>
+        <div className="flex flex-col gap-1.5 text-left">
+          <span className="text-xs uppercase tracking-wide text-neutral-500">Solutions</span>
+          {solutions.map((solution, index) => (
+            <div
+              key={solution.id}
+              className="flex flex-col gap-1.5 rounded-lg border border-neutral-800 p-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-neutral-500">Approach {index + 1}</span>
+                {solutions.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeSolution(solution.id)}
+                    className="text-xs text-neutral-500 hover:text-red-400"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <input
+                className={inputClass}
+                value={solution.approach}
+                onChange={(e) => updateSolution(solution.id, "approach", e.target.value)}
+                placeholder="Approach — Hash map"
+              />
+              <div className="flex gap-1.5">
+                <input
+                  className={`${inputClass} font-mono`}
+                  value={solution.timeComplexity}
+                  onChange={(e) => updateSolution(solution.id, "timeComplexity", e.target.value)}
+                  placeholder="Time — O(n)"
+                  spellCheck={false}
+                />
+                <input
+                  className={`${inputClass} font-mono`}
+                  value={solution.spaceComplexity}
+                  onChange={(e) => updateSolution(solution.id, "spaceComplexity", e.target.value)}
+                  placeholder="Space — O(1)"
+                  spellCheck={false}
+                />
+              </div>
+              <textarea
+                className={`${inputClass} h-40 resize-none font-mono`}
+                value={solution.code}
+                onChange={(e) => updateSolution(solution.id, "code", e.target.value)}
+                placeholder={"class Solution:\n    ..."}
+                spellCheck={false}
+              />
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addSolution}
+            className="self-start rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:border-neutral-500"
+          >
+            + Add approach
+          </button>
+        </div>
 
         {error !== null && <p className="text-sm text-red-400">{error}</p>}
 
@@ -235,7 +332,7 @@ export function ImportDialog({ onClose, onAdd }: ImportDialogProps) {
             onClick={submit}
             className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
           >
-            Add
+            {editing ? "Save" : "Add"}
           </button>
         </div>
       </div>

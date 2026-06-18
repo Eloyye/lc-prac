@@ -4,14 +4,14 @@ import { useLibrary } from "../store/library";
 import { allTags, filterProblems } from "../content/filter";
 import type { DifficultyFilter } from "../content/filter";
 import { ProblemCard } from "./ProblemCard";
-import { ImportDialog } from "./ImportDialog";
+import { ProblemDialog } from "./ProblemDialog";
 
 const DIFFICULTIES: DifficultyFilter[] = ["all", "easy", "medium", "hard"];
 
 export function Library() {
   const problems = useLibrary((s) => s.problems);
-  const addCustom = useLibrary((s) => s.addCustom);
-  const removeCustom = useLibrary((s) => s.removeCustom);
+  const saveProblem = useLibrary((s) => s.saveProblem);
+  const deleteProblem = useLibrary((s) => s.deleteProblem);
 
   const navigate = useNavigate();
   const search = useSearch({ from: "/problems" });
@@ -112,13 +112,13 @@ export function Library() {
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((problem) => (
-              <ProblemCard key={problem.id} problem={problem} onDelete={removeCustom} />
+              <ProblemCard key={problem.id} problem={problem} onDelete={deleteProblem} />
             ))}
           </div>
         )}
       </div>
 
-      {importing && <ImportDialog onClose={() => setImporting(false)} onAdd={addCustom} />}
+      {importing && <ProblemDialog onClose={() => setImporting(false)} onSubmit={saveProblem} />}
     </div>
   );
 }

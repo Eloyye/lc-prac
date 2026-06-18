@@ -1,8 +1,11 @@
-import { Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import type { Mode, Problem, Solution } from "../types";
-import { bestFor, recentAttemptsForProblem } from "../persistence/storage";
+import { bestFor, hasOverride, recentAttemptsForProblem } from "../persistence/storage";
+import { useLibrary } from "../store/library";
 import { DIFFICULTY_COLOR } from "./difficulty";
 import { Markdown } from "./Markdown";
+import { ProblemDialog } from "./ProblemDialog";
 
 const sectionHeading = "mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500";
 
@@ -27,18 +30,73 @@ function formatDate(iso: string): string {
 }
 
 export function ProblemDetail({ problem }: { problem: Problem }) {
+  const navigate = useNavigate();
+  const saveProblem = useLibrary((s) => s.saveProblem);
+  const deleteProblem = useLibrary((s) => s.deleteProblem);
+  const resetProblem = useLibrary((s) => s.resetProblem);
+  const [editing, setEditing] = useState(false);
+
   const attempts = recentAttemptsForProblem(problem.id);
   // Attempts only store a solutionId; resolve the approach from the Problem's
   // current Solutions, tolerating one that has since been removed.
   const approachFor = (solutionId: string): string =>
     problem.solutions.find((s) => s.id === solutionId)?.approach ?? "Removed approach";
 
+  // A bundled Problem can be reverted only once the user has actually edited it.
+  const canReset = problem.origin === "bundled" && hasOverride(problem.id);
+
+  const handleDelete = (): void => {
+    if (
+      window.confirm(
+        `Delete "${problem.title}"? This also removes its attempts and personal bests.`,
+      )
+    ) {
+      deleteProblem(problem.id);
+      navigate({ to: "/problems" });
+    }
+  };
+
+  const handleReset = (): void => {
+    if (
+      window.confirm(`Reset "${problem.title}" to the original version? Your edits are discarded.`)
+    ) {
+      resetProblem(problem.id);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100">
+    <div className="relative min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto max-w-3xl px-6 py-8">
-        <Link to="/problems" className="text-sm text-neutral-400 hover:text-neutral-200">
-          ← Back to the library
-        </Link>
+        <div className="flex items-center justify-between gap-4">
+          <Link to="/problems" className="text-sm text-neutral-400 hover:text-neutral-200">
+            ← Back to the library
+          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-neutral-500"
+            >
+              Edit
+            </button>
+            {canReset && (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 hover:border-neutral-500"
+              >
+                Reset to original
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 hover:border-red-500 hover:text-red-400"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
 
         <header className="mt-4 mb-8">
           <h1 className="text-2xl font-semibold">{problem.title}</h1>
@@ -205,6 +263,10 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
           )}
         </section>
       </div>
+
+      {editing && (
+        <ProblemDialog initial={problem} onClose={() => setEditing(false)} onSubmit={saveProblem} />
+      )}
     </div>
   );
 }

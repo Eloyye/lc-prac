@@ -19,7 +19,7 @@ The Solution's code, shown read-only, that the user reproduces — the product-f
 _Avoid_: target (in product language), solution text
 
 **Origin**:
-Whether a Problem ships with the app (**bundled**) or was added by the user (**custom**) — the only provenance the model keeps.
+Whether a Problem ships with the app (**bundled**) or was added by the user (**custom**) — the only provenance the model keeps. Provenance is permanent: editing a bundled Problem keeps it bundled (the edit becomes an Override) — it never turns into a custom Problem.
 _Avoid_: source, curated, built-in
 
 **Library**:
@@ -29,6 +29,14 @@ _Avoid_: catalog, collection, problem set
 **Import**:
 The act of adding a custom Problem by pasting your own code; the result is a custom Problem stored locally.
 _Avoid_: upload
+
+**Override**:
+A user's edit of a **bundled** Problem, stored locally as a full-Problem copy that shadows the shipped one in the Library (the shipped Problem lives in source and can't be mutated). Reversible: **Reset** drops the Override and restores the shipped version. Custom Problems have no Override — they are edited in place.
+_Avoid_: fork, patch
+
+**Tombstone**:
+The local marker that hides a deleted **bundled** Problem from the Library (a shipped Problem can't be removed from source, so it is hidden instead). Deleting a custom Problem needs none — it is simply removed. Either deletion also purges that Problem's Attempts and Personal Bests.
+_Avoid_: soft delete, hidden flag
 
 ### Practice
 
