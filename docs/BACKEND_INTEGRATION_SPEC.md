@@ -9,8 +9,8 @@
 
 CodeType is currently a Vite/React app with local application state and a small development-only Node service for Pyright:
 
-- Bundled Problems are hardcoded in `src/content/problems.ts`.
-- Custom Problems, bundled Problem Overrides and Tombstones, Attempts, Personal Bests, and Settings are persisted in `localStorage` through `src/persistence/storage.ts`.
+- Bundled Problems are hardcoded in `shared/content/problems.ts`.
+- Custom Problems, bundled Problem Overrides and Tombstones, Attempts, Personal Bests, and Settings are persisted in `localStorage` through `web/src/persistence/storage.ts`.
 - Pyright runs over WebSocket at `/lsp` through a Vite development-server plugin. Production builds do not currently host the language server.
 - There is no account model, cloud sync, or server-owned source of truth.
 
@@ -169,7 +169,7 @@ server/
     stats.ts
     settings.ts
 
-src/
+web/src/
   api/
     client.ts               # browser API client
     auth.ts                 # Better Auth React client
@@ -188,10 +188,10 @@ drizzle.config.ts
 
 Keep shared DTO types in one of these places:
 
-- `shared/` if both browser and server import them.
-- `src/types.ts` only if it remains browser-safe and imports no server-only modules.
+- `shared/` (e.g. `shared/types.ts`) if both browser and server import them.
+- `web/src/` only for browser-only types that import no server-only modules.
 
-Do not import `server/*` from `src/*`.
+Do not import `server/*` from `web/src/*`.
 
 ---
 
@@ -268,7 +268,7 @@ export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
 
 ### 7.5 React auth client
 
-Create a browser auth client in `src/api/auth.ts`:
+Create a browser auth client in `web/src/api/auth.ts`:
 
 ```ts
 import { createAuthClient } from "better-auth/react";
@@ -787,9 +787,9 @@ Protected. Replaces the Settings row. The initial DTO contains only `mode` and `
 Introduce API modules instead of calling `localStorage` directly from UI/store code:
 
 ```text
-src/api/problems.ts
-src/api/attempts.ts
-src/api/settings.ts
+web/src/api/problems.ts
+web/src/api/attempts.ts
+web/src/api/settings.ts
 ```
 
 The Zustand stores should depend on these API modules, not on Hono, Drizzle, or Better Auth internals.
@@ -1128,13 +1128,13 @@ Acceptance criteria:
 - Add effective Library list/detail routes.
 - Add custom Problem create/update/archive/restore/permanent-delete behavior.
 - Add bundled Override, hide/restore, and Reset behavior.
-- Replace `src/store/library.ts` local merge with API-backed loading.
+- Replace `web/src/store/library.ts` local merge with API-backed loading.
 - Keep current `Problem` / `Solution` client type shape.
 - Make route loaders await Library hydration so deep links and refreshes do not transiently return not-found.
 
 Acceptance criteria:
 
-- Bundled Problems render from SQLite, not from `src/content/problems.ts`.
+- Bundled Problems render from SQLite, not from `shared/content/problems.ts`.
 - Signed-in users can import a custom solution and see it after refresh.
 - One user's custom Problems, Overrides, and Tombstones are invisible to another user.
 - Hiding or archiving a Problem preserves its Attempts and Personal Bests; permanent deletion is explicit and limited to archived custom Problems.
