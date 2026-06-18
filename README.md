@@ -7,8 +7,8 @@ your speed and accuracy. See [docs/PRD.md](docs/PRD.md) and
 
 **Status:** Phase 1 in progress. A curated Python problem set with browse/filter
 and custom import; Copy-mode typing with char-by-char feedback, auto-indent, live
-HUD, results, and local persistence. IntelliSense (completion + hover via pyright)
-is built into `pnpm dev`; diagnostics are a known follow-up.
+HUD, results, and local persistence. IntelliSense (completion, hover, signature
+help, and diagnostics via pyright) is built into `pnpm dev`.
 
 ## Quickstart
 

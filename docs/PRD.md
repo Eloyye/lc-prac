@@ -238,7 +238,7 @@ This is the larger build task, but well-trodden — typing tests on Monaco exist
 2. **Hosted language server over WebSocket.** Run pyright / `jedi-language-server` / `pylsp` on a backend and bridge LSP-over-WS to the editor. More powerful for heavy/multi-file scenarios but adds infra, per-session processes, and cost.
 3. **Stopgap completion (no server, P1 quick win).** Keyword completion + identifiers harvested from the target solution + snippets. _Not_ real IntelliSense (no types/hover/diagnostics), but cheap and surprisingly relevant since the target is known — fine to ship first while you wire up pyright.
 
-> **Built: option 2 (WebSocket backend).** The in-browser worker (option 1) was abandoned — `@typefox/pyright-browser`'s nested background-analysis worker never returned results in-browser. Real node pyright over the WS bridge gives working completion + hover; diagnostics are an open config item.
+> **Built: option 2 (WebSocket backend).** The in-browser worker (option 1) was abandoned — `@typefox/pyright-browser`'s nested background-analysis worker never returned results in-browser. Real node pyright over the WS bridge provides completion, hover, signature help, and diagnostics.
 
 ### Optional later: code execution
 
@@ -322,7 +322,7 @@ Accounts + sync, leaderboards, more languages, hosted language server (if ever n
 **Decided**
 
 - ✅ **Editor: Monaco** — gives built-in IntelliSense UI; typing-test mechanics built on top via decorations (§10).
-- ✅ **IntelliSense: always on, every mode**, powered by **real pyright on a Node WebSocket backend** (revises the original "no backend" stance; the in-browser worker path was abandoned). Completion + hover verified; diagnostics WIP.
+- ✅ **IntelliSense: on in every mode unless distraction-free is enabled**, powered by **real pyright on a Node WebSocket backend** (revises the original "no backend" stance; the in-browser worker path was abandoned). Completion, hover, signature help, and diagnostics are verified.
 - ✅ **Lead with Copy mode** for v1 — Recall/SRS (memorization) is the fast-follow, not the launch focus.
 - ✅ **Content: both curated _and_ user-imported** at launch.
 - ✅ **Error behavior: allow typing through mistakes** (Monkeytype default) — errors are marked against accuracy, not blocked; optional block mode deferred.

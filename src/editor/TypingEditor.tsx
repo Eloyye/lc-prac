@@ -9,11 +9,14 @@ import {
 } from "../typing-engine";
 import { toRuns } from "./decorations";
 import { syncDocument } from "./lsp";
+import type { SyncedDocument } from "./lsp";
+import { practiceDocumentUri } from "./lsp-config";
 import { useSession } from "../store/session";
 
 interface TypingEditorProps {
   target: string;
   onComplete: () => void;
+  distractionFree?: boolean;
 }
 
 let docCounter = 0;
@@ -24,10 +27,29 @@ let docCounter = 0;
  * inserted automatically on Enter so it never needs to be typed. The model is
  * backed by a file:// URI so pyright (see ./lsp) analyzes it for IntelliSense.
  */
-export function TypingEditor({ target, onComplete }: TypingEditorProps) {
+export function TypingEditor({ target, onComplete, distractionFree = false }: TypingEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const lspDocumentRef = useRef<SyncedDocument | null>(null);
+  const distractionFreeRef = useRef(distractionFree);
+  distractionFreeRef.current = distractionFree;
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
+
+  useEffect(() => {
+    const enabled = !distractionFree;
+    lspDocumentRef.current?.setEnabled(enabled);
+    editorRef.current?.updateOptions({
+      quickSuggestions: enabled ? { other: true, comments: false, strings: false } : false,
+      suggestOnTriggerCharacters: enabled,
+      parameterHints: { enabled },
+      renderValidationDecorations: enabled ? "on" : "off",
+    });
+    if (!enabled) {
+      editorRef.current?.trigger("distraction-free", "hideSuggestWidget", null);
+      editorRef.current?.trigger("distraction-free", "closeParameterHints", null);
+    }
+  }, [distractionFree]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -37,20 +59,23 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
     const model = monaco.editor.createModel(
       "",
       "python",
-      monaco.Uri.file(`/practice-${docCounter}.py`),
+      monaco.Uri.parse(practiceDocumentUri(docCounter)),
     );
 
     const editor = monaco.editor.create(container, {
       ...baseEditorOptions,
       model,
       cursorSmoothCaretAnimation: "on",
-      // IntelliSense (completion / hover / signature help) is live, but
+      // IntelliSense (completion / hover / signature help / diagnostics) is live, but
       // Enter stays a plain newline so it never accepts a suggestion — that
       // keeps the auto-indent handler below unambiguous.
       acceptSuggestionOnEnter: "off",
-      quickSuggestions: { other: true, comments: false, strings: false },
-      suggestOnTriggerCharacters: true,
-      parameterHints: { enabled: true },
+      quickSuggestions: distractionFreeRef.current
+        ? false
+        : { other: true, comments: false, strings: false },
+      suggestOnTriggerCharacters: !distractionFreeRef.current,
+      parameterHints: { enabled: !distractionFreeRef.current },
+      renderValidationDecorations: distractionFreeRef.current ? "off" : "on",
       wordBasedSuggestions: "off",
       autoIndent: "none",
       // Typing ( [ or { inserts the matching close and leaves the cursor
@@ -66,6 +91,7 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
       formatOnType: false,
       formatOnPaste: false,
     });
+    editorRef.current = editor;
 
     const { start, registerKeystroke, setCorrectChars, finish } = useSession.getState();
     const decorations = editor.createDecorationsCollection();
@@ -165,7 +191,8 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
 
     const change = model.onDidChangeContent(update);
 
-    const lspDocument = syncDocument(model);
+    const lspDocument = syncDocument(model, !distractionFreeRef.current);
+    lspDocumentRef.current = lspDocument;
     editor.focus();
     update();
 
@@ -173,6 +200,8 @@ export function TypingEditor({ target, onComplete }: TypingEditorProps) {
       keyDown.dispose();
       change.dispose();
       lspDocument.dispose();
+      lspDocumentRef.current = null;
+      editorRef.current = null;
       editor.dispose();
       model.dispose();
     };

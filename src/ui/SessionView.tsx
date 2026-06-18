@@ -19,6 +19,7 @@ export function SessionView({ problem, solution, onExit }: SessionViewProps) {
   const [now, setNow] = useState(() => Date.now());
   const [savedBest, setSavedBest] = useState<number | null>(null);
   const [isNewBest, setIsNewBest] = useState(false);
+  const [distractionFree, setDistractionFree] = useState(false);
 
   const status = useSession((s) => s.status);
   const startedAt = useSession((s) => s.startedAt);
@@ -105,7 +106,21 @@ export function SessionView({ problem, solution, onExit }: SessionViewProps) {
           <span className="text-sm text-neutral-400">{problem.title}</span>
           <span className="text-xs text-neutral-500">{solution.approach}</span>
         </div>
-        <Hud metrics={metrics} elapsedMs={elapsedMs} />
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            aria-pressed={distractionFree}
+            onClick={() => setDistractionFree((enabled) => !enabled)}
+            className={`rounded border px-2 py-1 text-xs ${
+              distractionFree
+                ? "border-emerald-600 bg-emerald-950 text-emerald-300"
+                : "border-neutral-700 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+            }`}
+          >
+            Distraction-free
+          </button>
+          <Hud metrics={metrics} elapsedMs={elapsedMs} />
+        </div>
       </header>
 
       <main className="relative grid flex-1 grid-cols-2 gap-px overflow-hidden bg-neutral-800">
@@ -122,7 +137,12 @@ export function SessionView({ problem, solution, onExit }: SessionViewProps) {
             Your code
           </div>
           <div className="flex-1 overflow-hidden">
-            <TypingEditor key={attemptKey} target={solution.code} onComplete={handleComplete} />
+            <TypingEditor
+              key={attemptKey}
+              target={solution.code}
+              onComplete={handleComplete}
+              distractionFree={distractionFree}
+            />
           </div>
         </section>
 

@@ -93,7 +93,7 @@ function reduce(s: EngineState, e: EngineEvent): EngineState; // pure
 - **Decorations** via `createDecorationsCollection`; recompute only the changed region per change (NFR-1).
 - **Caret**: built-in `cursorSmoothCaretAnimation`, gated on `prefers-reduced-motion`.
 - **Color-blind safety**: errors = red **+ underline**, never hue alone (NFR-7).
-- **IntelliSense (FR-8)**: a hand-written adapter (`src/editor/lsp.ts`) maps Monaco completion/hover/signature providers to a pyright LSP connection over WebSocket (a Vite plugin in `vite.config.ts` serves `/lsp` and spawns `pyright-langserver --stdio`). Connects lazily and degrades gracefully when the LSP is unreachable. Diagnostics handler is wired but pyright isn't publishing yet (config follow-up).
+- **IntelliSense (FR-8)**: a hand-written adapter (`src/editor/lsp.ts`) maps Monaco completion/hover/signature providers and diagnostics to a pyright LSP connection over WebSocket (a Vite plugin in `vite.config.ts` serves `/lsp` and spawns `pyright-langserver --stdio`). Practice documents live in a narrow virtual workspace and use open-file analysis, so diagnostics arrive without a project scan. Connects lazily and degrades gracefully when the LSP is unreachable. Distraction-free mode silences providers and markers without interrupting document sync.
 
 ---
 
@@ -229,7 +229,6 @@ Engineering decisions (product decisions in PRD §15).
 
 ## 12. Risks
 
-- **pyright not publishing diagnostics** over the bridge — open config item (completion + hover work).
 - **Bundle size / cold load** — mitigate via lazy LSP + code-splitting.
 - **Per-keystroke decoration cost** on large solutions — mitigate with incremental (changed-region) diff.
 - **pyright browser-build upkeep** — track API drift on upgrades.
