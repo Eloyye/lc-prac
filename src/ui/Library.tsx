@@ -112,17 +112,7 @@ export function Library() {
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((problem) => (
-              <ProblemCard
-                key={problem.id}
-                problem={problem}
-                onStart={(p, s) => {
-                  navigate({
-                    to: "/problems/$problemId/$solutionId",
-                    params: { problemId: p.id, solutionId: s.id },
-                  });
-                }}
-                onDelete={removeCustom}
-              />
+              <ProblemCard key={problem.id} problem={problem} onDelete={removeCustom} />
             ))}
           </div>
         )}
