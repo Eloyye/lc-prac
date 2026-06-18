@@ -17,6 +17,7 @@ export type Env = {
   readonly PORT: number;
   readonly LOG_LEVEL: LogLevel;
   readonly PUBLIC_APP_URL: string;
+  readonly DB_FILE_NAME: string;
 };
 
 export type EnvSource = Record<string, string | undefined>;
@@ -96,6 +97,17 @@ export function parseEnv(source: EnvSource): Env {
     issues.push("PUBLIC_APP_URL is required in production (e.g. https://codetype.example.com).");
   }
 
+  // SQLite database file. Defaults to a gitignored local file for development;
+  // production should point this at a durable volume (e.g. /data/codetype.sqlite).
+  // Drizzle Kit reads the same variable for migrations (see drizzle.config.ts).
+  let dbFileName = "./data/codetype.sqlite";
+  const rawDbFileName = source.DB_FILE_NAME;
+  if (rawDbFileName !== undefined && rawDbFileName !== "") {
+    dbFileName = rawDbFileName;
+  } else if (nodeEnv === "production") {
+    issues.push("DB_FILE_NAME is required in production (e.g. /data/codetype.sqlite).");
+  }
+
   if (issues.length > 0) {
     throw new EnvError(issues);
   }
@@ -105,5 +117,6 @@ export function parseEnv(source: EnvSource): Env {
     PORT: port,
     LOG_LEVEL: logLevel,
     PUBLIC_APP_URL: publicAppUrl,
+    DB_FILE_NAME: dbFileName,
   });
 }

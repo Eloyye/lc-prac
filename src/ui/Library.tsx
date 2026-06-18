@@ -11,6 +11,9 @@ const DIFFICULTIES: DifficultyFilter[] = ["all", "easy", "medium", "hard"];
 
 export function Library() {
   const problems = useLibrary((s) => s.problems);
+  const status = useLibrary((s) => s.status);
+  const error = useLibrary((s) => s.error);
+  const load = useLibrary((s) => s.load);
   const saveProblem = useLibrary((s) => s.saveProblem);
   const deleteProblem = useLibrary((s) => s.deleteProblem);
   const openPalette = usePreferences((s) => s.openPalette);
@@ -126,7 +129,20 @@ export function Library() {
           </select>
         </div>
 
-        {filtered.length === 0 ? (
+        {status === "error" ? (
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-rose-400">{error ?? "Could not load the library."}</p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-300 hover:border-neutral-500 hover:text-white"
+            >
+              Retry
+            </button>
+          </div>
+        ) : status !== "ready" ? (
+          <p className="text-neutral-500">Loading library…</p>
+        ) : filtered.length === 0 ? (
           <p className="text-neutral-500">No problems match your filters.</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

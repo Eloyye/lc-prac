@@ -15,7 +15,7 @@ import {
 import type { LibrarySearch } from "./content/filter";
 import { nextPracticeTarget } from "./content/next";
 import { initStorage } from "./persistence/storage";
-import { useLibrary } from "./store/library";
+import { resolveProblem, resolveSession, useLibrary } from "./store/library";
 import { Library } from "./ui/Library";
 import { CommandPalette } from "./ui/CommandPalette";
 import { ProblemDetail } from "./ui/ProblemDetail";
@@ -40,10 +40,13 @@ function validateLibrarySearch(search: Record<string, unknown>): LibrarySearch {
   };
 }
 
-/** Always-mounted shell; stamps the storage schema once on first load. */
+/** Always-mounted shell; stamps the storage schema and hydrates the Library. */
 function RootLayout() {
   useEffect(() => {
     initStorage();
+    // Kick off Library hydration for routes without a blocking loader (the list).
+    // Idempotent with the deep-link loaders, which await the same load.
+    void useLibrary.getState().ensureLoaded();
   }, []);
   return (
     <>
@@ -131,12 +134,13 @@ const problemRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/problems/$problemId",
   validateSearch: validateLibrarySearch,
-  // Resolve the Problem from the merged library; an unknown id (bad URL, deleted
-  // custom Problem) falls through to NotFound, mirroring the Session loader.
-  loader: ({ params }) => {
-    const { problems } = useLibrary.getState();
-    const problem = problems.find((p) => p.id === params.problemId);
-    if (problem === undefined) {
+  // Await Library hydration before resolving the Problem, so a direct navigation
+  // or refresh does not transiently 404 while the API load is in flight. A
+  // genuinely unknown id (bad URL, deleted custom Problem) falls through to
+  // NotFound, mirroring the Session loader.
+  loader: async ({ params }) => {
+    const problem = await resolveProblem(params.problemId);
+    if (problem === null) {
       throw notFound();
     }
     return { problem };
@@ -148,16 +152,15 @@ const sessionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/problems/$problemId/$solutionId",
   validateSearch: validateLibrarySearch,
-  // Resolve the Problem/Solution from the merged library once per navigation;
-  // an unknown id (bad URL, deleted custom Problem) falls through to NotFound.
-  loader: ({ params }) => {
-    const { problems } = useLibrary.getState();
-    const problem = problems.find((p) => p.id === params.problemId);
-    const solution = problem?.solutions.find((s) => s.id === params.solutionId);
-    if (problem === undefined || solution === undefined) {
+  // Await Library hydration before resolving the Problem/Solution, so deep links
+  // and refreshes wait for the API load instead of transiently 404ing. An
+  // unknown id (bad URL, deleted custom Problem) falls through to NotFound.
+  loader: async ({ params }) => {
+    const target = await resolveSession(params.problemId, params.solutionId);
+    if (target === null) {
       throw notFound();
     }
-    return { problem, solution };
+    return target;
   },
   component: SessionPage,
 });
