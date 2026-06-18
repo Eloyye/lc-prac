@@ -27,6 +27,7 @@ export type Env = {
   readonly LSP_MAX_CONNECTIONS_PER_IP: number;
   readonly LSP_IDLE_TIMEOUT_MS: number;
   readonly DB_FILE_NAME: string;
+  readonly BETTER_AUTH_SECRET: string;
 };
 
 export type EnvSource = Record<string, string | undefined>;
@@ -156,6 +157,20 @@ export function parseEnv(source: EnvSource): Env {
     issues.push("DB_FILE_NAME is required in production (e.g. /data/codetype.sqlite).");
   }
 
+  let betterAuthSecret = "development-only-secret-change-me-123456";
+  const rawBetterAuthSecret = source.BETTER_AUTH_SECRET;
+  if (rawBetterAuthSecret !== undefined && rawBetterAuthSecret !== "") {
+    if (rawBetterAuthSecret.length >= 32) {
+      betterAuthSecret = rawBetterAuthSecret;
+    } else {
+      issues.push("BETTER_AUTH_SECRET must be at least 32 characters.");
+    }
+  } else if (nodeEnv === "production") {
+    issues.push(
+      "BETTER_AUTH_SECRET is required in production (generate one with openssl rand -base64 32).",
+    );
+  }
+
   if (issues.length > 0) {
     throw new EnvError(issues);
   }
@@ -169,5 +184,6 @@ export function parseEnv(source: EnvSource): Env {
     LSP_MAX_CONNECTIONS_PER_IP: lspMaxConnectionsPerIp,
     LSP_IDLE_TIMEOUT_MS: lspIdleTimeoutMs,
     DB_FILE_NAME: dbFileName,
+    BETTER_AUTH_SECRET: betterAuthSecret,
   });
 }

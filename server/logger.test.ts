@@ -9,6 +9,7 @@ function capture() {
     NODE_ENV: "production",
     PUBLIC_APP_URL: "https://codetype.example.com",
     DB_FILE_NAME: "/data/codetype.sqlite",
+    BETTER_AUTH_SECRET: "production-secret-that-is-at-least-32-characters",
     LOG_LEVEL: "trace",
   });
   const logger = pino(
@@ -28,7 +29,8 @@ describe("loggerOptions", () => {
     logger.info(
       {
         req: { headers: { authorization: "Bearer secret-token", cookie: "session=abc" } },
-        body: { password: "hunter2", code: "print('do not log me')" },
+        body: { password: "hunter2", code: "print('do not log me')", note: "request-body" },
+        token: "raw-session-token",
         solution: { code: "def solve(): return 42" },
         code: "top-level-secret",
         keep: "visible-field",
@@ -42,6 +44,8 @@ describe("loggerOptions", () => {
     expect(line).not.toContain("secret-token");
     expect(line).not.toContain("session=abc");
     expect(line).not.toContain("hunter2");
+    expect(line).not.toContain("request-body");
+    expect(line).not.toContain("raw-session-token");
     expect(line).not.toContain("do not log me");
     expect(line).not.toContain("def solve");
     expect(line).not.toContain("top-level-secret");

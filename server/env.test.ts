@@ -12,6 +12,7 @@ describe("parseEnv", () => {
       LSP_MAX_CONNECTIONS_PER_IP: 2,
       LSP_IDLE_TIMEOUT_MS: 900000,
       DB_FILE_NAME: "./data/codetype.sqlite",
+      BETTER_AUTH_SECRET: "development-only-secret-change-me-123456",
     });
   });
 
@@ -26,6 +27,7 @@ describe("parseEnv", () => {
         LSP_MAX_CONNECTIONS_PER_IP: "5",
         LSP_IDLE_TIMEOUT_MS: "60000",
         DB_FILE_NAME: "/data/codetype.sqlite",
+        BETTER_AUTH_SECRET: "production-secret-that-is-at-least-32-characters",
       }),
     ).toEqual({
       NODE_ENV: "production",
@@ -36,6 +38,7 @@ describe("parseEnv", () => {
       LSP_MAX_CONNECTIONS_PER_IP: 5,
       LSP_IDLE_TIMEOUT_MS: 60000,
       DB_FILE_NAME: "/data/codetype.sqlite",
+      BETTER_AUTH_SECRET: "production-secret-that-is-at-least-32-characters",
     });
   });
 
@@ -47,7 +50,11 @@ describe("parseEnv", () => {
 
   it("requires DB_FILE_NAME in production", () => {
     expect(() =>
-      parseEnv({ NODE_ENV: "production", PUBLIC_APP_URL: "https://codetype.example.com" }),
+      parseEnv({
+        NODE_ENV: "production",
+        PUBLIC_APP_URL: "https://codetype.example.com",
+        BETTER_AUTH_SECRET: "production-secret-that-is-at-least-32-characters",
+      }),
     ).toThrow(/DB_FILE_NAME is required/);
   });
 
@@ -63,7 +70,24 @@ describe("parseEnv", () => {
   });
 
   it("requires PUBLIC_APP_URL in production", () => {
-    expect(() => parseEnv({ NODE_ENV: "production" })).toThrow(/PUBLIC_APP_URL is required/);
+    expect(() =>
+      parseEnv({
+        NODE_ENV: "production",
+        DB_FILE_NAME: "/data/codetype.sqlite",
+        BETTER_AUTH_SECRET: "production-secret-that-is-at-least-32-characters",
+      }),
+    ).toThrow(/PUBLIC_APP_URL is required/);
+  });
+
+  it("requires a strong BETTER_AUTH_SECRET in production", () => {
+    expect(() =>
+      parseEnv({
+        NODE_ENV: "production",
+        PUBLIC_APP_URL: "https://codetype.example.com",
+        DB_FILE_NAME: "/data/codetype.sqlite",
+      }),
+    ).toThrow(/BETTER_AUTH_SECRET is required/);
+    expect(() => parseEnv({ BETTER_AUTH_SECRET: "too-short" })).toThrow(/at least 32 characters/);
   });
 
   it("rejects a non-numeric PORT", () => {
@@ -107,6 +131,7 @@ describe("parseEnv", () => {
         LOG_LEVEL: "loud",
         NODE_ENV: "production",
         DB_FILE_NAME: "/data/codetype.sqlite",
+        BETTER_AUTH_SECRET: "production-secret-that-is-at-least-32-characters",
       });
     } catch (caught) {
       error = caught;
