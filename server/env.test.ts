@@ -8,6 +8,9 @@ describe("parseEnv", () => {
       PORT: 3000,
       LOG_LEVEL: "info",
       PUBLIC_APP_URL: "http://localhost:3000",
+      LSP_MAX_CONNECTIONS: 20,
+      LSP_MAX_CONNECTIONS_PER_IP: 2,
+      LSP_IDLE_TIMEOUT_MS: 900000,
       DB_FILE_NAME: "./data/codetype.sqlite",
     });
   });
@@ -19,6 +22,9 @@ describe("parseEnv", () => {
         PORT: "8080",
         LOG_LEVEL: "debug",
         PUBLIC_APP_URL: "https://codetype.example.com",
+        LSP_MAX_CONNECTIONS: "40",
+        LSP_MAX_CONNECTIONS_PER_IP: "5",
+        LSP_IDLE_TIMEOUT_MS: "60000",
         DB_FILE_NAME: "/data/codetype.sqlite",
       }),
     ).toEqual({
@@ -26,6 +32,9 @@ describe("parseEnv", () => {
       PORT: 8080,
       LOG_LEVEL: "debug",
       PUBLIC_APP_URL: "https://codetype.example.com",
+      LSP_MAX_CONNECTIONS: 40,
+      LSP_MAX_CONNECTIONS_PER_IP: 5,
+      LSP_IDLE_TIMEOUT_MS: 60000,
       DB_FILE_NAME: "/data/codetype.sqlite",
     });
   });
@@ -74,6 +83,13 @@ describe("parseEnv", () => {
   it("rejects an invalid NODE_ENV", () => {
     expect(() => parseEnv({ NODE_ENV: "staging" })).toThrow(/NODE_ENV must be one of/);
   });
+
+  it.each(["LSP_MAX_CONNECTIONS", "LSP_MAX_CONNECTIONS_PER_IP", "LSP_IDLE_TIMEOUT_MS"])(
+    "rejects an invalid %s",
+    (name) => {
+      expect(() => parseEnv({ [name]: "0" })).toThrow(`${name} must be an integer`);
+    },
+  );
 
   it("rejects a non-http PUBLIC_APP_URL", () => {
     expect(() => parseEnv({ PUBLIC_APP_URL: "ftp://example.com" })).toThrow(

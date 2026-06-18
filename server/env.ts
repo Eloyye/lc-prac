@@ -1,3 +1,9 @@
+import {
+  DEFAULT_LSP_IDLE_TIMEOUT_MS,
+  DEFAULT_LSP_MAX_CONNECTIONS,
+  DEFAULT_LSP_MAX_CONNECTIONS_PER_IP,
+} from "./lsp";
+
 /**
  * Typed parsing and validation of process environment for the application
  * server. Validation runs once at startup (see `index.ts`); any invalid value
@@ -17,6 +23,9 @@ export type Env = {
   readonly PORT: number;
   readonly LOG_LEVEL: LogLevel;
   readonly PUBLIC_APP_URL: string;
+  readonly LSP_MAX_CONNECTIONS: number;
+  readonly LSP_MAX_CONNECTIONS_PER_IP: number;
+  readonly LSP_IDLE_TIMEOUT_MS: number;
   readonly DB_FILE_NAME: string;
 };
 
@@ -43,6 +52,23 @@ function isValidHttpUrl(value: string): boolean {
     return false;
   }
   return url.protocol === "http:" || url.protocol === "https:";
+}
+
+function parsePositiveInteger(
+  source: EnvSource,
+  name: string,
+  fallback: number,
+  maximum: number,
+  issues: string[],
+): number {
+  const raw = source[name];
+  if (raw === undefined || raw === "") return fallback;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > maximum) {
+    issues.push(`${name} must be an integer between 1 and ${maximum} (received "${raw}").`);
+    return fallback;
+  }
+  return parsed;
 }
 
 /**
@@ -72,6 +98,28 @@ export function parseEnv(source: EnvSource): Env {
       port = parsed;
     }
   }
+
+  const lspMaxConnections = parsePositiveInteger(
+    source,
+    "LSP_MAX_CONNECTIONS",
+    DEFAULT_LSP_MAX_CONNECTIONS,
+    10_000,
+    issues,
+  );
+  const lspMaxConnectionsPerIp = parsePositiveInteger(
+    source,
+    "LSP_MAX_CONNECTIONS_PER_IP",
+    DEFAULT_LSP_MAX_CONNECTIONS_PER_IP,
+    10_000,
+    issues,
+  );
+  const lspIdleTimeoutMs = parsePositiveInteger(
+    source,
+    "LSP_IDLE_TIMEOUT_MS",
+    DEFAULT_LSP_IDLE_TIMEOUT_MS,
+    2_147_483_647,
+    issues,
+  );
 
   let logLevel: LogLevel = nodeEnv === "test" ? "silent" : "info";
   const rawLogLevel = source.LOG_LEVEL;
@@ -117,6 +165,9 @@ export function parseEnv(source: EnvSource): Env {
     PORT: port,
     LOG_LEVEL: logLevel,
     PUBLIC_APP_URL: publicAppUrl,
+    LSP_MAX_CONNECTIONS: lspMaxConnections,
+    LSP_MAX_CONNECTIONS_PER_IP: lspMaxConnectionsPerIp,
+    LSP_IDLE_TIMEOUT_MS: lspIdleTimeoutMs,
     DB_FILE_NAME: dbFileName,
   });
 }
