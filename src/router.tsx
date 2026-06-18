@@ -14,6 +14,7 @@ import type { DifficultyFilter } from "./content/filter";
 import { initStorage } from "./persistence/storage";
 import { useLibrary } from "./store/library";
 import { Library } from "./ui/Library";
+import { ProblemDetail } from "./ui/ProblemDetail";
 import { SessionView } from "./ui/SessionView";
 
 /**
@@ -48,6 +49,11 @@ function NotFound() {
       </Link>
     </div>
   );
+}
+
+function ProblemPage() {
+  const { problem } = useLoaderData({ from: "/problems/$problemId" });
+  return <ProblemDetail problem={problem} />;
 }
 
 function SessionPage() {
@@ -91,6 +97,22 @@ const problemsRoute = createRoute({
   component: Library,
 });
 
+const problemRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/problems/$problemId",
+  // Resolve the Problem from the merged library; an unknown id (bad URL, deleted
+  // custom Problem) falls through to NotFound, mirroring the Session loader.
+  loader: ({ params }) => {
+    const { problems } = useLibrary.getState();
+    const problem = problems.find((p) => p.id === params.problemId);
+    if (problem === undefined) {
+      throw notFound();
+    }
+    return { problem };
+  },
+  component: ProblemPage,
+});
+
 const sessionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/problems/$problemId/$solutionId",
@@ -108,7 +130,7 @@ const sessionRoute = createRoute({
   component: SessionPage,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, problemsRoute, sessionRoute]);
+const routeTree = rootRoute.addChildren([indexRoute, problemsRoute, problemRoute, sessionRoute]);
 
 export const router = createRouter({ routeTree });
 

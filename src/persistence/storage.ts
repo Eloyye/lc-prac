@@ -31,6 +31,18 @@ export function loadAttempts(): Attempt[] {
   return read<Attempt[]>(KEY_ATTEMPTS, []);
 }
 
+/**
+ * A Problem's Attempts across all its Solutions, most recent first and capped at
+ * `limit`. Backs the Problem detail page's recent-activity list; createdAt is an
+ * ISO timestamp, so a lexicographic compare orders chronologically.
+ */
+export function recentAttemptsForProblem(problemId: string, limit = 5): Attempt[] {
+  return loadAttempts()
+    .filter((a) => a.problemId === problemId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, limit);
+}
+
 function loadBestScores(): BestScore[] {
   return read<BestScore[]>(KEY_BEST, []);
 }

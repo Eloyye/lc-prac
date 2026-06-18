@@ -4,6 +4,7 @@ import {
   bestFor,
   deleteCustomProblem,
   loadAttempts,
+  recentAttemptsForProblem,
   saveAttempt,
   saveCustomProblem,
 } from "./storage";
@@ -39,7 +40,13 @@ function makeProblem(id: string): Problem {
   };
 }
 
-function makeAttempt(id: string, problemId: string, solutionId: string, cpm: number): Attempt {
+function makeAttempt(
+  id: string,
+  problemId: string,
+  solutionId: string,
+  cpm: number,
+  createdAt = "2026-06-17T00:00:00.000Z",
+): Attempt {
   return {
     id,
     problemId,
@@ -49,7 +56,7 @@ function makeAttempt(id: string, problemId: string, solutionId: string, cpm: num
     wpm: cpm / 5,
     accuracyPct: 100,
     durationMs: 1000,
-    createdAt: "2026-06-17T00:00:00.000Z",
+    createdAt,
   };
 }
 
@@ -79,5 +86,29 @@ describe("deleteCustomProblem", () => {
     // p2's history is left untouched.
     expect(loadAttempts().map((a) => a.id)).toEqual(["a3"]);
     expect(bestFor("p2", "p2-s")?.bestCpm).toBe(150);
+  });
+});
+
+describe("recentAttemptsForProblem", () => {
+  it("returns a problem's attempts most-recent-first, capped at the limit", () => {
+    saveAttempt(makeAttempt("a1", "p1", "p1-s", 100, "2026-06-01T00:00:00.000Z"));
+    saveAttempt(makeAttempt("a2", "p1", "p1-s", 120, "2026-06-03T00:00:00.000Z"));
+    saveAttempt(makeAttempt("a3", "p1", "p1-s", 110, "2026-06-02T00:00:00.000Z"));
+
+    // Newest first, regardless of insertion order, and capped at the limit.
+    expect(recentAttemptsForProblem("p1", 2).map((a) => a.id)).toEqual(["a2", "a3"]);
+  });
+
+  it("excludes other problems' attempts and defaults to the last 5", () => {
+    for (let i = 1; i <= 7; i++) {
+      const day = String(i).padStart(2, "0");
+      saveAttempt(makeAttempt(`a${i}`, "p1", "p1-s", 100, `2026-06-${day}T00:00:00.000Z`));
+    }
+    saveAttempt(makeAttempt("other", "p2", "p2-s", 100, "2026-06-09T00:00:00.000Z"));
+
+    const recent = recentAttemptsForProblem("p1");
+    expect(recent).toHaveLength(5);
+    expect(recent.map((a) => a.id)).toEqual(["a7", "a6", "a5", "a4", "a3"]);
+    expect(recent.every((a) => a.problemId === "p1")).toBe(true);
   });
 });

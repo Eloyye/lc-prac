@@ -1,29 +1,33 @@
-import type { Problem, Solution } from "../types";
+import { Link } from "@tanstack/react-router";
+import type { Problem } from "../types";
 import { bestFor } from "../persistence/storage";
+import { DIFFICULTY_COLOR } from "./difficulty";
 
 interface ProblemCardProps {
   problem: Problem;
-  onStart: (problem: Problem, solution: Solution) => void;
   onDelete: (id: string) => void;
 }
 
-const DIFFICULTY_COLOR: Record<Problem["difficulty"], string> = {
-  easy: "text-emerald-400",
-  medium: "text-amber-400",
-  hard: "text-red-400",
-};
-
-export function ProblemCard({ problem, onStart, onDelete }: ProblemCardProps) {
+export function ProblemCard({ problem, onDelete }: ProblemCardProps) {
   const bestCpms = problem.solutions
     .map((s) => bestFor(problem.id, s.id)?.bestCpm)
     .filter((v): v is number => v !== undefined);
   const bestCpm = bestCpms.length > 0 ? Math.max(...bestCpms) : null;
+  const count = problem.solutions.length;
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="font-medium text-neutral-100">{problem.title}</h3>
+          <h3 className="font-medium text-neutral-100">
+            <Link
+              to="/problems/$problemId"
+              params={{ problemId: problem.id }}
+              className="hover:text-emerald-400"
+            >
+              {problem.title}
+            </Link>
+          </h3>
           <div className="mt-1 flex items-center gap-2 text-xs">
             <span className={`uppercase ${DIFFICULTY_COLOR[problem.difficulty]}`}>
               {problem.difficulty}
@@ -56,19 +60,16 @@ export function ProblemCard({ problem, onStart, onDelete }: ProblemCardProps) {
         ))}
       </div>
 
-      <div className="mt-auto flex flex-col gap-1.5">
-        {problem.solutions.map((solution) => (
-          <button
-            key={solution.id}
-            type="button"
-            onClick={() => onStart(problem, solution)}
-            className="flex items-center justify-between rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-emerald-500 hover:text-white"
-          >
-            <span>{solution.approach}</span>
-            <span className="text-xs text-neutral-500">{solution.timeComplexity ?? ""} →</span>
-          </button>
-        ))}
-      </div>
+      <Link
+        to="/problems/$problemId"
+        params={{ problemId: problem.id }}
+        className="mt-auto flex items-center justify-between rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-emerald-500 hover:text-white"
+      >
+        <span>
+          {count} {count === 1 ? "approach" : "approaches"}
+        </span>
+        <span className="text-xs text-neutral-500">→</span>
+      </Link>
     </div>
   );
 }
