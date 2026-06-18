@@ -6,6 +6,7 @@ import { bestFor, saveAttempt } from "../persistence/storage";
 import { ReferenceEditor } from "../editor/ReferenceEditor";
 import { TypingEditor } from "../editor/TypingEditor";
 import { Hud } from "./Hud";
+import { ProblemStatementPanel } from "./ProblemStatementPanel";
 import { Results } from "./Results";
 
 interface SessionViewProps {
@@ -122,6 +123,8 @@ export function SessionView({ problem, solution, onExit }: SessionViewProps) {
           <Hud metrics={metrics} elapsedMs={elapsedMs} />
         </div>
       </header>
+
+      <ProblemStatementPanel statement={problem.statement} url={problem.url} />
 
       <main className="relative grid flex-1 grid-cols-2 gap-px overflow-hidden bg-neutral-800">
         <section className="flex flex-col overflow-hidden bg-neutral-950">
