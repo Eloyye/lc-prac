@@ -6,6 +6,7 @@ import { useLibrary } from "../store/library";
 import { DIFFICULTY_COLOR } from "./difficulty";
 import { Markdown } from "./Markdown";
 import { ProblemDialog } from "./ProblemDialog";
+import { AccountControl } from "./AccountControl";
 
 const sectionHeading = "mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500";
 
@@ -100,6 +101,8 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
             >
               Delete
             </button>
+            <span className="mx-1 h-6 w-px bg-neutral-700" aria-hidden="true" />
+            <AccountControl />
           </div>
         </div>
 

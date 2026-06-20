@@ -1,17 +1,57 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { Link } from "@tanstack/react-router";
 import { authClient } from "../api/auth";
 
 type AuthMode = "sign-in" | "sign-up";
 
+/** Two-letter monogram for the avatar: initials from the name, else the email. */
+function avatarInitials(user: { name?: string | null; email: string }): string {
+  const name = (user.name ?? "").trim();
+  if (name !== "") {
+    const parts = name.split(/\s+/);
+    const first = parts[0]?.[0] ?? "";
+    const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : "";
+    return (first + last).toUpperCase();
+  }
+  return user.email.slice(0, 2).toUpperCase();
+}
+
+/**
+ * Account control that lives inline in a route header (right-side cluster).
+ * Signed out it is a single "Sign in" button; signed in it collapses to an
+ * initials avatar that opens a dropdown menu. The sign-in/up modal is rendered
+ * as a centred overlay, unchanged from when this was a floating widget.
+ */
 export function AccountControl() {
   const { data: session, isPending, refetch } = authClient.useSession();
   const [mode, setMode] = useState<AuthMode | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Dismiss the avatar menu on outside pointerdown or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent): void => {
+      if (menuRef.current !== null && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
 
   const close = (): void => {
     setMode(null);
@@ -42,33 +82,78 @@ export function AccountControl() {
 
   return (
     <>
-      <div className="fixed right-4 bottom-4 z-40 flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-900/95 p-2 text-sm text-neutral-100 shadow-xl backdrop-blur">
-        {isPending ? (
-          <span className="px-2 text-neutral-500">Checking account…</span>
-        ) : session === null ? (
-          <>
-            <span className="hidden px-2 text-neutral-500 sm:inline">Browsing anonymously</span>
-            <button
-              type="button"
-              onClick={() => setMode("sign-in")}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 font-medium hover:bg-emerald-500"
+      {isPending ? (
+        <div
+          className="h-8 w-8 rounded-full border border-neutral-700 bg-neutral-800"
+          aria-hidden="true"
+        />
+      ) : session === null ? (
+        <button
+          type="button"
+          onClick={() => setMode("sign-in")}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600/15"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-4 w-4"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" />
+          </svg>
+          Sign in
+        </button>
+      ) : (
+        <div ref={menuRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="Account menu"
+            title={session.user.email}
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-600/70 bg-emerald-900/40 text-xs font-medium text-emerald-200 hover:border-emerald-500 hover:text-emerald-100"
+          >
+            {avatarInitials(session.user)}
+          </button>
+
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 z-50 mt-2 w-52 rounded-xl border border-neutral-700 bg-neutral-900 p-1.5 text-sm shadow-2xl"
             >
-              Sign in
-            </button>
-          </>
-        ) : (
-          <>
-            <span className="max-w-48 truncate px-2 text-neutral-300">{session.user.email}</span>
-            <button
-              type="button"
-              onClick={() => void authClient.signOut()}
-              className="rounded-lg border border-neutral-700 px-3 py-1.5 text-neutral-300 hover:border-neutral-500 hover:text-white"
-            >
-              Sign out
-            </button>
-          </>
-        )}
-      </div>
+              <div className="border-b border-neutral-800 px-2.5 py-2">
+                <div className="text-xs text-neutral-500">Signed in as</div>
+                <div className="truncate text-neutral-200">{session.user.email}</div>
+              </div>
+              <Link
+                to="/stats"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className="mt-1 block rounded-lg px-2.5 py-2 text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              >
+                Stats
+              </Link>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  void authClient.signOut();
+                }}
+                className="block w-full rounded-lg px-2.5 py-2 text-left text-rose-300 hover:bg-neutral-800 hover:text-rose-200"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {mode !== null && (
         <div
