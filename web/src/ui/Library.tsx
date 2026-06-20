@@ -6,6 +6,7 @@ import type { DifficultyFilter } from "@shared/content/filter";
 import { usePreferences } from "../store/preferences";
 import { ProblemCard } from "./ProblemCard";
 import { ProblemDialog } from "./ProblemDialog";
+import { AccountControl } from "./AccountControl";
 
 const DIFFICULTIES: DifficultyFilter[] = ["all", "easy", "medium", "hard"];
 
@@ -89,6 +90,8 @@ export function Library() {
             >
               Import solution
             </button>
+            <span className="mx-1 h-6 w-px bg-neutral-700" aria-hidden="true" />
+            <AccountControl />
           </div>
         </header>
 

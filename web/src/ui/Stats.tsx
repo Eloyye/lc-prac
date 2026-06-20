@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { loadAttempts } from "../persistence/storage";
+import { AccountControl } from "./AccountControl";
 
 export function Stats() {
   const attempts = loadAttempts();
@@ -13,9 +14,12 @@ export function Stats() {
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto max-w-3xl px-6 py-8">
-        <Link to="/problems" className="text-sm text-neutral-400 hover:text-neutral-200">
-          ← Back to the library
-        </Link>
+        <div className="flex items-center justify-between gap-4">
+          <Link to="/problems" className="text-sm text-neutral-400 hover:text-neutral-200">
+            ← Back to the library
+          </Link>
+          <AccountControl />
+        </div>
         <header className="mt-4 mb-8">
           <h1 className="text-2xl font-semibold">Stats</h1>
           <p className="mt-1 text-sm text-neutral-500">A summary of completed Sessions.</p>
