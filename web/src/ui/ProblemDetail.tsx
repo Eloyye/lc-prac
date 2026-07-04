@@ -7,8 +7,18 @@ import { DIFFICULTY_COLOR } from "./difficulty";
 import { Markdown } from "./Markdown";
 import { ProblemDialog } from "./ProblemDialog";
 import { AccountControl } from "./AccountControl";
+import { HeaderMenu } from "./HeaderMenu";
+import type { HeaderMenuItem } from "./HeaderMenu";
 
 const sectionHeading = "mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500";
+
+/** Inline (≥md) button styling for a header action, keyed off its menu variant. */
+function actionClass(variant: HeaderMenuItem["variant"]): string {
+  const base = "rounded-lg border border-neutral-700 px-3 py-1.5 text-sm";
+  return variant === "danger"
+    ? `${base} text-neutral-300 hover:border-red-500 hover:text-red-400`
+    : `${base} text-neutral-300 hover:border-neutral-500`;
+}
 
 // Display label per Mode. Only Copy is wired today (every Attempt is hardcoded to
 // it); Recall and Free are listed so the mode-aware PB/Attempt UI below needs no
@@ -81,6 +91,19 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
     }
   };
 
+  // One source of truth for the header actions: rendered inline as buttons at
+  // `md` and up, and collapsed into the HeaderMenu hamburger below it. Reset is
+  // present only when a bundled Problem has an Override to revert.
+  const actions: HeaderMenuItem[] = [
+    { label: "Edit", onClick: () => setEditing(true) },
+    ...(canReset ? [{ label: "Reset to original", onClick: handleReset }] : []),
+    {
+      label: problem.origin === "bundled" ? "Hide" : "Delete",
+      variant: "danger",
+      onClick: handleDelete,
+    },
+  ];
+
   return (
     <div className="relative min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto max-w-3xl px-6 py-8">
@@ -93,29 +116,19 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
             ← Back to the library
           </Link>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-neutral-500"
-            >
-              Edit
-            </button>
-            {canReset && (
-              <button
-                type="button"
-                onClick={() => void handleReset()}
-                className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 hover:border-neutral-500"
-              >
-                Reset to original
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => void handleDelete()}
-              className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 hover:border-red-500 hover:text-red-400"
-            >
-              {problem.origin === "bundled" ? "Hide" : "Delete"}
-            </button>
+            <div className="hidden items-center gap-2 md:flex">
+              {actions.map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={action.onClick}
+                  className={actionClass(action.variant)}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+            <HeaderMenu items={actions} className="md:hidden" />
             <span className="mx-1 h-6 w-px bg-neutral-700" aria-hidden="true" />
             <AccountControl />
           </div>
