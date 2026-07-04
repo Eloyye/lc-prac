@@ -9,8 +9,17 @@ import { ProblemDialog } from "./ProblemDialog";
 import { AccountControl } from "./AccountControl";
 import { authClient } from "../api/auth";
 import type { Problem } from "@shared/types";
+import { HeaderMenu } from "./HeaderMenu";
+import type { HeaderMenuItem } from "./HeaderMenu";
 
 const DIFFICULTIES: DifficultyFilter[] = ["all", "easy", "medium", "hard"];
+
+/** Inline (≥md) button styling for a header action, keyed off its menu variant. */
+function actionClass(variant: HeaderMenuItem["variant"]): string {
+  return variant === "primary"
+    ? "rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+    : "rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-400 hover:border-neutral-500 hover:text-white";
+}
 
 export function Library() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
@@ -79,6 +88,20 @@ export function Library() {
     }
   };
 
+  // One source of truth for the header actions: rendered inline as buttons at
+  // `md` and up, and collapsed into the HeaderMenu hamburger below it.
+  const actions: HeaderMenuItem[] = [
+    { label: "Commands", kbd: "⌘K", onClick: openPalette },
+    { label: "Settings", onClick: openSettings },
+    {
+      label: "Create problem",
+      variant: "primary",
+      onClick: () => setImporting(true),
+      disabled: sessionPending || session === null,
+      title: session === null ? "Sign in to create synced custom Problems" : undefined,
+    },
+  ];
+
   return (
     <div className="relative min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto max-w-5xl px-6 py-8">
@@ -90,29 +113,24 @@ export function Library() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={openPalette}
-              className="rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-400 hover:border-neutral-500 hover:text-white"
-            >
-              Commands <kbd className="ml-1 font-mono text-xs">⌘K</kbd>
-            </button>
-            <button
-              type="button"
-              onClick={openSettings}
-              className="rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-400 hover:border-neutral-500 hover:text-white"
-            >
-              Settings
-            </button>
-            <button
-              type="button"
-              onClick={() => setImporting(true)}
-              disabled={sessionPending || session === null}
-              title={session === null ? "Sign in to create synced custom Problems" : undefined}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Create problem
-            </button>
+            <div className="hidden items-center gap-2 md:flex">
+              {actions.map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={action.onClick}
+                  disabled={action.disabled}
+                  title={action.title}
+                  className={`${actionClass(action.variant)} disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  {action.label}
+                  {action.kbd !== undefined && (
+                    <kbd className="ml-1 font-mono text-xs">{action.kbd}</kbd>
+                  )}
+                </button>
+              ))}
+            </div>
+            <HeaderMenu items={actions} className="md:hidden" />
             <span className="mx-1 h-6 w-px bg-neutral-700" aria-hidden="true" />
             <AccountControl />
           </div>
