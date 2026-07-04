@@ -14,7 +14,14 @@ const ORIGIN = "http://localhost:3000";
 const SECRET = "test-secret-that-is-at-least-32-characters";
 const PASSWORD = "correct-horse-battery-staple";
 
-type ProblemListBody = { problems: Problem[]; nextCursor: string | null };
+type ProblemListBody = {
+  problems: Problem[];
+  nextCursor: string | null;
+  personalization?: {
+    overriddenProblemIds: string[];
+    hiddenProblems: Problem[];
+  } | null;
+};
 type ApiErrorBody = {
   error: {
     code: string;
@@ -307,5 +314,105 @@ describe("authenticated custom Problem lifecycle", () => {
       await requestWithCookie("/api/problems?status=archived", cookie)
     ).json()) as ProblemListBody;
     expect(archived.problems).toEqual([]);
+  });
+});
+
+describe("bundled Problem personalization", () => {
+  const original = PROBLEMS.find((problem) => problem.id === "two-sum")!;
+  const edited: Problem = {
+    ...original,
+    title: "Two Sum — personalized",
+    statement: "My private notes",
+    expectedTime: "O(n)",
+    expectedSpace: "O(n)",
+    examples: [{ input: "nums = [2, 7], target = 9", output: "[0, 1]" }],
+    tags: [...original.tags, "favorite"],
+    solutions: original.solutions.map((solution) => ({
+      ...solution,
+      approach: `${solution.approach} (mine)`,
+    })),
+  };
+
+  it("isolates Overrides and Tombstones between two users and the global bundle", async () => {
+    const ada = await signUp("Ada", "ada-bundled@example.com");
+    const grace = await signUp("Grace", "grace-bundled@example.com");
+
+    const update = await requestWithCookie("/api/problems/two-sum", ada, "PATCH", edited);
+    expect(update.status).toBe(200);
+    expect(await update.json()).toEqual(edited);
+    expect(await (await requestWithCookie("/api/problems/two-sum", ada)).json()).toEqual(edited);
+    expect(await (await requestWithCookie("/api/problems/two-sum", grace)).json()).toEqual(
+      original,
+    );
+
+    expect((await requestWithCookie("/api/problems/two-sum", grace, "DELETE")).status).toBe(200);
+    expect((await requestWithCookie("/api/problems/two-sum", grace)).status).toBe(404);
+    expect((await requestWithCookie("/api/problems/two-sum", ada)).status).toBe(200);
+    expect(await (await app.request("/api/problems/two-sum")).json()).toEqual(original);
+  });
+
+  it("retains an Override while hidden and restores that same snapshot", async () => {
+    const cookie = await signUp("Restore", "restore-bundled@example.com");
+    await requestWithCookie("/api/problems/two-sum", cookie, "PATCH", edited);
+    await requestWithCookie("/api/problems/two-sum", cookie, "DELETE");
+
+    const hiddenList = (await (
+      await requestWithCookie("/api/problems", cookie)
+    ).json()) as ProblemListBody;
+    expect(ids(hiddenList)).not.toContain("two-sum");
+    expect(hiddenList.personalization).toEqual({
+      overriddenProblemIds: ["two-sum"],
+      hiddenProblems: [edited],
+    });
+
+    expect((await requestWithCookie("/api/problems/two-sum/restore", cookie, "POST")).status).toBe(
+      200,
+    );
+    expect(await (await requestWithCookie("/api/problems/two-sum", cookie)).json()).toEqual(edited);
+  });
+
+  it("resets only the Override while leaving the Tombstone in place", async () => {
+    const cookie = await signUp("Reset", "reset-bundled@example.com");
+    await requestWithCookie("/api/problems/two-sum", cookie, "PATCH", edited);
+    await requestWithCookie("/api/problems/two-sum", cookie, "DELETE");
+
+    expect((await requestWithCookie("/api/problems/two-sum/reset", cookie, "POST")).status).toBe(
+      200,
+    );
+    const stillHidden = (await (
+      await requestWithCookie("/api/problems", cookie)
+    ).json()) as ProblemListBody;
+    expect(ids(stillHidden)).not.toContain("two-sum");
+    expect(stillHidden.personalization).toEqual({
+      overriddenProblemIds: [],
+      hiddenProblems: [original],
+    });
+
+    await requestWithCookie("/api/problems/two-sum/restore", cookie, "POST");
+    expect(await (await requestWithCookie("/api/problems/two-sum", cookie)).json()).toEqual(
+      original,
+    );
+  });
+
+  it("rejects anonymous writes and preserves bundled provenance", async () => {
+    expect((await app.request("/api/problems/two-sum", { method: "DELETE" })).status).toBe(401);
+    const cookie = await signUp("Validation", "validation-bundled@example.com");
+    const response = await requestWithCookie("/api/problems/two-sum", cookie, "PATCH", {
+      ...edited,
+      id: "different-id",
+      origin: "custom",
+      solutions: [],
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json()) as unknown).toMatchObject({
+      error: {
+        code: "VALIDATION",
+        fieldErrors: {
+          id: expect.any(Array),
+          origin: expect.any(Array),
+          solutions: expect.any(Array),
+        },
+      },
+    });
   });
 });

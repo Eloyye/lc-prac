@@ -2,7 +2,15 @@ import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import type { Example, Problem, Solution } from "../../shared/types";
 import { filterProblems } from "../../shared/content/filter";
 import type { Db } from "../db/client";
-import { problemExamples, problems, problemTags, solutions, tags } from "../db/schema";
+import {
+  problemExamples,
+  problemOverrides,
+  problems,
+  problemTags,
+  problemTombstones,
+  solutions,
+  tags,
+} from "../db/schema";
 import type { ProblemExampleRow, ProblemRow, SolutionRow } from "../db/schema";
 
 export type ListProblemsQuery = {
@@ -18,6 +26,12 @@ export type ListProblemsQuery = {
 export type ProblemListResult = {
   problems: Problem[];
   nextCursor: string | null;
+  personalization: ProblemPersonalization | null;
+};
+
+export type ProblemPersonalization = {
+  overriddenProblemIds: string[];
+  hiddenProblems: Problem[];
 };
 
 export type CustomProblemMutationResult =
@@ -127,6 +141,35 @@ function loadBundledRows(db: Db): ProblemRow[] {
     .all();
 }
 
+function loadPersonalization(
+  db: Db,
+  bundled: Problem[],
+  userId: string,
+): { active: Problem[]; metadata: ProblemPersonalization } {
+  const overrideRows = db
+    .select()
+    .from(problemOverrides)
+    .where(eq(problemOverrides.userId, userId))
+    .all();
+  const tombstoneRows = db
+    .select()
+    .from(problemTombstones)
+    .where(eq(problemTombstones.userId, userId))
+    .all();
+  const overrides = new Map(
+    overrideRows.map((row) => [row.bundledProblemId, JSON.parse(row.snapshotJson) as Problem]),
+  );
+  const hiddenIds = new Set(tombstoneRows.map((row) => row.bundledProblemId));
+  const effective = bundled.map((problem) => overrides.get(problem.id) ?? problem);
+  return {
+    active: effective.filter((problem) => !hiddenIds.has(problem.id)),
+    metadata: {
+      overriddenProblemIds: overrideRows.map((row) => row.bundledProblemId),
+      hiddenProblems: effective.filter((problem) => hiddenIds.has(problem.id)),
+    },
+  };
+}
+
 function loadOwnedCustomRows(
   db: Db,
   userId: string | undefined,
@@ -154,11 +197,11 @@ export function listProblems(
   userId?: string,
 ): ProblemListResult {
   const status = query.status ?? "active";
-  const rows =
-    status === "archived"
-      ? loadOwnedCustomRows(db, userId, "archived")
-      : [...loadBundledRows(db), ...loadOwnedCustomRows(db, userId, "active")];
-  let filtered = filterProblems(assembleProblems(db, rows), {
+  const bundled = status === "active" ? assembleProblems(db, loadBundledRows(db)) : [];
+  const personalized =
+    status === "active" && userId !== undefined ? loadPersonalization(db, bundled, userId) : null;
+  const custom = assembleProblems(db, loadOwnedCustomRows(db, userId, status));
+  let filtered = filterProblems([...(personalized?.active ?? bundled), ...custom], {
     query: query.q ?? "",
     difficulty: query.difficulty ?? "all",
     tag: query.tag ?? null,
@@ -176,10 +219,11 @@ export function listProblems(
   return {
     problems: page,
     nextCursor: reachedEnd || page.length === 0 ? null : page[page.length - 1]!.id,
+    personalization: personalized?.metadata ?? null,
   };
 }
 
-/** One active Problem readable by the caller. Other users' customs are concealed. */
+/** One effective active Problem readable by the caller. */
 export function getProblem(db: Db, id: string, userId?: string): Problem | null {
   const row = db.select().from(problems).where(eq(problems.id, id)).get();
   if (
@@ -189,7 +233,79 @@ export function getProblem(db: Db, id: string, userId?: string): Problem | null 
   ) {
     return null;
   }
-  return assembleProblems(db, [row])[0] ?? null;
+  const problem = assembleProblems(db, [row])[0] ?? null;
+  if (problem === null || row.origin === "custom" || userId === undefined) return problem;
+
+  const tombstone = db
+    .select({ id: problemTombstones.bundledProblemId })
+    .from(problemTombstones)
+    .where(and(eq(problemTombstones.userId, userId), eq(problemTombstones.bundledProblemId, id)))
+    .get();
+  if (tombstone !== undefined) return null;
+
+  const override = db
+    .select({ snapshotJson: problemOverrides.snapshotJson })
+    .from(problemOverrides)
+    .where(and(eq(problemOverrides.userId, userId), eq(problemOverrides.bundledProblemId, id)))
+    .get();
+  return override === undefined ? problem : (JSON.parse(override.snapshotJson) as Problem);
+}
+
+function bundledProblemExists(db: Db, id: string): boolean {
+  return (
+    db
+      .select({ id: problems.id })
+      .from(problems)
+      .where(and(eq(problems.id, id), eq(problems.origin, "bundled")))
+      .get() !== undefined
+  );
+}
+
+export function saveProblemOverride(
+  db: Db,
+  userId: string,
+  snapshot: Problem,
+  now = Date.now(),
+): boolean {
+  if (!bundledProblemExists(db, snapshot.id)) return false;
+  db.insert(problemOverrides)
+    .values({
+      userId,
+      bundledProblemId: snapshot.id,
+      snapshotJson: JSON.stringify(snapshot),
+      updatedAtMs: now,
+    })
+    .onConflictDoUpdate({
+      target: [problemOverrides.userId, problemOverrides.bundledProblemId],
+      set: { snapshotJson: JSON.stringify(snapshot), updatedAtMs: now },
+    })
+    .run();
+  return true;
+}
+
+export function hideBundledProblem(db: Db, userId: string, id: string, now = Date.now()): boolean {
+  if (!bundledProblemExists(db, id)) return false;
+  db.insert(problemTombstones)
+    .values({ userId, bundledProblemId: id, hiddenAtMs: now })
+    .onConflictDoNothing()
+    .run();
+  return true;
+}
+
+export function restoreBundledProblem(db: Db, userId: string, id: string): boolean {
+  if (!bundledProblemExists(db, id)) return false;
+  db.delete(problemTombstones)
+    .where(and(eq(problemTombstones.userId, userId), eq(problemTombstones.bundledProblemId, id)))
+    .run();
+  return true;
+}
+
+export function resetBundledProblem(db: Db, userId: string, id: string): boolean {
+  if (!bundledProblemExists(db, id)) return false;
+  db.delete(problemOverrides)
+    .where(and(eq(problemOverrides.userId, userId), eq(problemOverrides.bundledProblemId, id)))
+    .run();
+  return true;
 }
 
 function ownedCustomRow(db: Db, id: string, userId: string): ProblemRow | undefined {

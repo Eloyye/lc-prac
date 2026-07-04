@@ -5,9 +5,13 @@ import {
   archiveProblem,
   createProblem,
   getProblem,
+  hideBundledProblem,
   listProblems,
   permanentlyDeleteProblem,
+  resetBundledProblem,
+  restoreBundledProblem,
   restoreProblem,
+  updateBundledProblem,
   updateProblem,
 } from "./problems";
 
@@ -138,5 +142,34 @@ describe("custom Problem mutations", () => {
       ["/api/problems/custom%2Fid/restore", "POST"],
       ["/api/problems/custom%2Fid/permanent", "DELETE"],
     ]);
+  });
+});
+
+describe("bundled personalization mutations", () => {
+  it("PATCHes a complete Override snapshot as JSON", async () => {
+    const fetchSpy = stubFetch(() => jsonResponse(twoSum));
+
+    await updateBundledProblem({ ...twoSum, id: "two/sum" });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/problems/two%2Fsum",
+      expect.objectContaining({
+        method: "PATCH",
+        credentials: "same-origin",
+        body: JSON.stringify({ ...twoSum, id: "two/sum" }),
+      }),
+    );
+  });
+
+  it.each([
+    ["hide", hideBundledProblem, "/api/problems/two-sum", "DELETE"],
+    ["restore", restoreBundledProblem, "/api/problems/two-sum/restore", "POST"],
+    ["reset", resetBundledProblem, "/api/problems/two-sum/reset", "POST"],
+  ] as const)("calls the %s endpoint", async (_name, action, url, method) => {
+    const fetchSpy = stubFetch(() => jsonResponse({ ok: true }));
+
+    await action("two-sum");
+
+    expect(fetchSpy).toHaveBeenCalledWith(url, expect.objectContaining({ method }));
   });
 });

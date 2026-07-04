@@ -3,15 +3,22 @@ import type { Problem, Solution } from "@shared/types";
 import {
   archiveProblem,
   createProblem,
+  hideBundledProblem as hideBundledProblemOnServer,
   listProblems,
   permanentlyDeleteProblem as permanentlyDeleteProblemRequest,
+  resetBundledProblem as resetBundledProblemOnServer,
+  restoreBundledProblem as restoreBundledProblemOnServer,
   restoreProblem as restoreProblemRequest,
+  updateBundledProblem,
   updateProblem,
 } from "../api/problems";
 import {
   clearOverride,
   hideBundledProblem,
+  loadHidden,
+  loadOverrides,
   mergedLibrary,
+  restoreBundledProblem,
   saveOverride,
 } from "../persistence/storage";
 
@@ -22,6 +29,9 @@ interface LibraryState {
   problems: Problem[];
   bundled: Problem[];
   custom: Problem[];
+  hiddenProblems: Problem[];
+  overriddenProblemIds: string[];
+  authenticated: boolean;
   /** Owned custom Problems outside the active Library. */
   archived: Problem[];
   status: LibraryStatus;
@@ -29,13 +39,13 @@ interface LibraryState {
   actionError: string | null;
   load: () => Promise<void>;
   ensureLoaded: () => Promise<void>;
-  /** Create/update custom Problems remotely; bundled edits remain local until #25. */
+  /** Create/update custom Problems and authenticated bundled Overrides remotely. */
   saveProblem: (problem: Problem) => Promise<void>;
-  /** Archive a custom Problem; bundled Problems keep the current local hide path. */
+  /** Archive a custom Problem or Tombstone a bundled Problem. */
   deleteProblem: (id: string) => Promise<void>;
   restoreProblem: (id: string) => Promise<void>;
   permanentlyDeleteProblem: (id: string) => Promise<void>;
-  resetProblem: (id: string) => void;
+  resetProblem: (id: string) => Promise<void>;
   clearActionError: () => void;
 }
 
@@ -44,12 +54,24 @@ function isBundledId(bundled: Problem[], id: string): boolean {
 }
 
 function effectiveProblems(bundled: Problem[], custom: Problem[]): Problem[] {
-  // `mergedLibrary` still owns the bundled Override/Tombstone behavior. Discard
-  // its legacy local-custom tail: authenticated custom state now comes from API.
-  const personalizedBundled = mergedLibrary(bundled).filter(
-    (problem) => problem.origin === "bundled",
-  );
-  return [...personalizedBundled, ...custom];
+  // Authenticated bundled and custom state is already effective server state.
+  return [...bundled, ...custom];
+}
+
+function localBundledState(bundled: Problem[]): {
+  problems: Problem[];
+  hiddenProblems: Problem[];
+  overriddenProblemIds: string[];
+} {
+  const overrides = loadOverrides();
+  const hiddenIds = new Set(loadHidden());
+  return {
+    problems: mergedLibrary(bundled).filter((problem) => problem.origin === "bundled"),
+    hiddenProblems: bundled
+      .filter((problem) => hiddenIds.has(problem.id))
+      .map((problem) => overrides[problem.id] ?? problem),
+    overriddenProblemIds: Object.keys(overrides),
+  };
 }
 
 function message(cause: unknown): string {
@@ -62,6 +84,9 @@ export const useLibrary = create<LibraryState>((set, get) => ({
   problems: [],
   bundled: [],
   custom: [],
+  hiddenProblems: [],
+  overriddenProblemIds: [],
+  authenticated: false,
   archived: [],
   status: "idle",
   error: null,
@@ -76,11 +101,18 @@ export const useLibrary = create<LibraryState>((set, get) => ({
       ]);
       const bundled = activeResult.problems.filter((problem) => problem.origin === "bundled");
       const custom = activeResult.problems.filter((problem) => problem.origin === "custom");
+      const personalization = activeResult.personalization;
+      const authenticated = personalization !== null && personalization !== undefined;
+      const local = authenticated ? null : localBundledState(bundled);
       set({
         bundled,
         custom,
         archived: archivedResult.problems,
-        problems: effectiveProblems(bundled, custom),
+        problems: [...(local?.problems ?? bundled), ...custom],
+        hiddenProblems: personalization?.hiddenProblems ?? local?.hiddenProblems ?? [],
+        overriddenProblemIds:
+          personalization?.overriddenProblemIds ?? local?.overriddenProblemIds ?? [],
+        authenticated,
         status: "ready",
         error: null,
       });
@@ -105,11 +137,22 @@ export const useLibrary = create<LibraryState>((set, get) => ({
   },
 
   saveProblem: async (problem) => {
-    const { bundled, custom } = get();
+    const { authenticated, bundled, custom, load } = get();
     set({ actionError: null });
     if (isBundledId(bundled, problem.id)) {
-      saveOverride(problem);
-      set({ problems: effectiveProblems(bundled, custom) });
+      try {
+        if (authenticated) {
+          await updateBundledProblem(problem);
+          await load();
+        } else {
+          saveOverride(problem);
+          const local = localBundledState(bundled);
+          set({ ...local, problems: [...local.problems, ...custom] });
+        }
+      } catch (cause) {
+        set({ actionError: message(cause) });
+        throw cause;
+      }
       return;
     }
     try {
@@ -126,11 +169,22 @@ export const useLibrary = create<LibraryState>((set, get) => ({
   },
 
   deleteProblem: async (id) => {
-    const { bundled, custom, archived } = get();
+    const { authenticated, bundled, custom, archived, load } = get();
     set({ actionError: null });
     if (isBundledId(bundled, id)) {
-      hideBundledProblem(id);
-      set({ problems: effectiveProblems(bundled, custom) });
+      try {
+        if (authenticated) {
+          await hideBundledProblemOnServer(id);
+          await load();
+        } else {
+          hideBundledProblem(id);
+          const local = localBundledState(bundled);
+          set({ ...local, problems: [...local.problems, ...custom] });
+        }
+      } catch (cause) {
+        set({ actionError: message(cause) });
+        throw cause;
+      }
       return;
     }
     try {
@@ -148,9 +202,20 @@ export const useLibrary = create<LibraryState>((set, get) => ({
   },
 
   restoreProblem: async (id) => {
-    const { bundled, custom, archived } = get();
+    const { authenticated, bundled, custom, archived, hiddenProblems, load } = get();
     set({ actionError: null });
     try {
+      if (hiddenProblems.some((problem) => problem.id === id)) {
+        if (authenticated) {
+          await restoreBundledProblemOnServer(id);
+          await load();
+        } else {
+          restoreBundledProblem(id);
+          const local = localBundledState(bundled);
+          set({ ...local, problems: [...local.problems, ...custom] });
+        }
+        return;
+      }
       const restored = await restoreProblemRequest(id);
       const nextCustom = [...custom.filter((problem) => problem.id !== id), restored];
       set({
@@ -175,11 +240,23 @@ export const useLibrary = create<LibraryState>((set, get) => ({
     }
   },
 
-  resetProblem: (id) => {
-    const { bundled, custom } = get();
-    if (!isBundledId(bundled, id)) return;
-    clearOverride(id);
-    set({ problems: effectiveProblems(bundled, custom) });
+  resetProblem: async (id) => {
+    const { authenticated, bundled, custom, overriddenProblemIds, load } = get();
+    if (!overriddenProblemIds.includes(id)) return;
+    set({ actionError: null });
+    try {
+      if (authenticated) {
+        await resetBundledProblemOnServer(id);
+        await load();
+      } else {
+        clearOverride(id);
+        const local = localBundledState(bundled);
+        set({ ...local, problems: [...local.problems, ...custom] });
+      }
+    } catch (cause) {
+      set({ actionError: message(cause) });
+      throw cause;
+    }
   },
 
   clearActionError: () => set({ actionError: null }),

@@ -25,6 +25,8 @@ export function Library() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const problems = useLibrary((s) => s.problems);
   const archived = useLibrary((s) => s.archived);
+  const hiddenProblems = useLibrary((s) => s.hiddenProblems);
+  const overriddenProblemIds = useLibrary((s) => s.overriddenProblemIds);
   const status = useLibrary((s) => s.status);
   const error = useLibrary((s) => s.error);
   const actionError = useLibrary((s) => s.actionError);
@@ -32,6 +34,7 @@ export function Library() {
   const saveProblem = useLibrary((s) => s.saveProblem);
   const deleteProblem = useLibrary((s) => s.deleteProblem);
   const restoreProblem = useLibrary((s) => s.restoreProblem);
+  const resetProblem = useLibrary((s) => s.resetProblem);
   const permanentlyDeleteProblem = useLibrary((s) => s.permanentlyDeleteProblem);
   const openPalette = usePreferences((s) => s.openPalette);
   const openSettings = usePreferences((s) => s.openSettings);
@@ -45,7 +48,7 @@ export function Library() {
   const tag = search.tag ?? null;
 
   const [importing, setImporting] = useState(false);
-  const [view, setView] = useState<"active" | "archived">("active");
+  const [view, setView] = useState<"active" | "hidden" | "archived">("active");
 
   const setQuery = (value: string): void => {
     navigate({
@@ -69,7 +72,8 @@ export function Library() {
     });
   };
 
-  const displayedProblems = view === "active" ? problems : archived;
+  const displayedProblems =
+    view === "active" ? problems : view === "hidden" ? hiddenProblems : archived;
   const tags = useMemo(() => allTags(displayedProblems), [displayedProblems]);
   const filtered = useMemo(
     () => filterProblems(displayedProblems, { query, difficulty, tag }),
@@ -138,7 +142,7 @@ export function Library() {
 
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <div className="flex rounded-lg border border-neutral-700 p-0.5 text-sm">
-            {(["active", "archived"] as const).map((candidate) => (
+            {(["active", "hidden", "archived"] as const).map((candidate) => (
               <button
                 key={candidate}
                 type="button"
@@ -214,7 +218,7 @@ export function Library() {
                   search={search}
                   onArchive={archive}
                 />
-              ) : (
+              ) : view === "archived" ? (
                 <div
                   key={problem.id}
                   className="flex flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-4"
@@ -247,6 +251,34 @@ export function Library() {
                       className="rounded-lg border border-red-900 px-3 py-1.5 text-sm text-red-400 hover:border-red-600"
                     >
                       Delete permanently
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  key={problem.id}
+                  className="flex items-center justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4"
+                >
+                  <div>
+                    <h3 className="font-medium text-neutral-100">{problem.title}</h3>
+                    <span className="text-xs uppercase text-neutral-500">{problem.difficulty}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {overriddenProblemIds.includes(problem.id) && (
+                      <button
+                        type="button"
+                        onClick={() => void resetProblem(problem.id).catch(() => {})}
+                        className="text-xs text-neutral-500 hover:text-neutral-200"
+                      >
+                        Reset
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void restoreProblem(problem.id).catch(() => {})}
+                      className="rounded-lg border border-emerald-700 px-3 py-1.5 text-sm text-emerald-300 hover:border-emerald-500"
+                    >
+                      Restore
                     </button>
                   </div>
                 </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import type { Mode, Problem, Solution } from "@shared/types";
-import { bestFor, hasOverride, recentAttemptsForProblem } from "../persistence/storage";
+import { bestFor, recentAttemptsForProblem } from "../persistence/storage";
 import { useLibrary } from "../store/library";
 import { DIFFICULTY_COLOR } from "./difficulty";
 import { Markdown } from "./Markdown";
@@ -46,6 +46,7 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
   const saveProblem = useLibrary((s) => s.saveProblem);
   const deleteProblem = useLibrary((s) => s.deleteProblem);
   const resetProblem = useLibrary((s) => s.resetProblem);
+  const overriddenProblemIds = useLibrary((s) => s.overriddenProblemIds);
   const actionError = useLibrary((s) => s.actionError);
   const [editing, setEditing] = useState(false);
 
@@ -56,13 +57,13 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
     problem.solutions.find((s) => s.id === solutionId)?.approach ?? "Removed approach";
 
   // A bundled Problem can be reverted only once the user has actually edited it.
-  const canReset = problem.origin === "bundled" && hasOverride(problem.id);
+  const canReset = problem.origin === "bundled" && overriddenProblemIds.includes(problem.id);
 
   const handleDelete = (): void => {
     const message =
       problem.origin === "custom"
         ? `Archive "${problem.title}"? You can restore it later.`
-        : `Delete "${problem.title}"? This also removes its attempts and personal bests.`;
+        : `Hide "${problem.title}"? You can restore it later.`;
     if (window.confirm(message)) {
       void deleteProblem(problem.id)
         .then(() => navigate({ to: "/problems", search }))
@@ -74,18 +75,18 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
     if (
       window.confirm(`Reset "${problem.title}" to the original version? Your edits are discarded.`)
     ) {
-      resetProblem(problem.id);
+      void resetProblem(problem.id).catch(() => {});
     }
   };
 
   // One source of truth for the header actions: rendered inline as buttons at
   // `md` and up, and collapsed into the HeaderMenu hamburger below it. Reset is
-  // present only when a bundled Problem has local edits to revert.
+  // present only when a bundled Problem has an Override to revert.
   const actions: HeaderMenuItem[] = [
     { label: "Edit", onClick: () => setEditing(true) },
     ...(canReset ? [{ label: "Reset to original", onClick: handleReset }] : []),
     {
-      label: problem.origin === "custom" ? "Archive" : "Delete",
+      label: problem.origin === "custom" ? "Archive" : "Hide",
       variant: "danger",
       onClick: handleDelete,
     },

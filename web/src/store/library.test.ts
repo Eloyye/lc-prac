@@ -5,8 +5,12 @@ import type { ProblemListResponse } from "../api/problems";
 vi.mock("../api/problems", () => ({
   listProblems: vi.fn(),
   createProblem: vi.fn(),
+  hideBundledProblem: vi.fn(),
   updateProblem: vi.fn(),
+  updateBundledProblem: vi.fn(),
   archiveProblem: vi.fn(),
+  restoreBundledProblem: vi.fn(),
+  resetBundledProblem: vi.fn(),
   restoreProblem: vi.fn(),
   permanentlyDeleteProblem: vi.fn(),
 }));
@@ -14,18 +18,26 @@ vi.mock("../api/problems", () => ({
 import {
   archiveProblem,
   createProblem,
+  hideBundledProblem,
   listProblems,
   permanentlyDeleteProblem,
+  resetBundledProblem,
+  restoreBundledProblem,
   restoreProblem,
+  updateBundledProblem,
   updateProblem,
 } from "../api/problems";
 import { resolveProblem, resolveSession, useLibrary } from "./library";
 
 const mockedList = vi.mocked(listProblems);
 const mockedCreate = vi.mocked(createProblem);
+const mockedHideBundled = vi.mocked(hideBundledProblem);
 const mockedUpdate = vi.mocked(updateProblem);
+const mockedUpdateBundled = vi.mocked(updateBundledProblem);
 const mockedArchive = vi.mocked(archiveProblem);
 const mockedRestore = vi.mocked(restoreProblem);
+const mockedRestoreBundled = vi.mocked(restoreBundledProblem);
+const mockedResetBundled = vi.mocked(resetBundledProblem);
 const mockedPermanentDelete = vi.mocked(permanentlyDeleteProblem);
 
 // A bundled set the API "returns" — deliberately not the real PROBLEMS content,
@@ -77,9 +89,13 @@ function createLocalStorage(): Storage {
 beforeEach(() => {
   mockedList.mockReset();
   mockedCreate.mockReset();
+  mockedHideBundled.mockReset();
   mockedUpdate.mockReset();
+  mockedUpdateBundled.mockReset();
   mockedArchive.mockReset();
   mockedRestore.mockReset();
+  mockedRestoreBundled.mockReset();
+  mockedResetBundled.mockReset();
   mockedPermanentDelete.mockReset();
   vi.stubGlobal("localStorage", createLocalStorage());
   useLibrary.setState({
@@ -87,6 +103,9 @@ beforeEach(() => {
     bundled: [],
     custom: [],
     archived: [],
+    hiddenProblems: [],
+    overriddenProblemIds: [],
+    authenticated: false,
     status: "idle",
     error: null,
     actionError: null,
@@ -246,5 +265,63 @@ describe("server-backed custom Problem lifecycle", () => {
 
     expect(useLibrary.getState().archived).toEqual([]);
     expect(mockedPermanentDelete).toHaveBeenCalledWith(custom.id);
+  });
+});
+
+describe("authenticated bundled personalization", () => {
+  const edited = { ...apiBundled[0]!, title: "Two Sum — server override" };
+  const personalized = {
+    overriddenProblemIds: ["two-sum"],
+    hiddenProblems: [] as Problem[],
+  };
+
+  function mockPersonalized(active: Problem[], metadata = personalized): void {
+    mockedList.mockImplementation((params) =>
+      Promise.resolve(
+        params?.status === "archived"
+          ? ok([])
+          : { problems: active, nextCursor: null, personalization: metadata },
+      ),
+    );
+  }
+
+  it("uses the server-effective merge instead of a stale local Override", async () => {
+    localStorage.setItem(
+      "ct:problems:overrides",
+      JSON.stringify({ "two-sum": { ...apiBundled[0], title: "stale local edit" } }),
+    );
+    mockPersonalized([edited], {
+      overriddenProblemIds: ["two-sum", "valid-parens"],
+      hiddenProblems: [{ ...apiBundled[1]!, title: "Hidden personal snapshot" }],
+    });
+
+    await useLibrary.getState().load();
+
+    expect(useLibrary.getState()).toMatchObject({
+      authenticated: true,
+      problems: [edited],
+      overriddenProblemIds: ["two-sum", "valid-parens"],
+      hiddenProblems: [{ ...apiBundled[1]!, title: "Hidden personal snapshot" }],
+    });
+  });
+
+  it("persists edit, Hide, Restore, and Reset through the API", async () => {
+    mockPersonalized(apiBundled);
+    mockedUpdateBundled.mockResolvedValue(edited);
+    mockedHideBundled.mockResolvedValue({ ok: true });
+    mockedRestoreBundled.mockResolvedValue({ ok: true });
+    mockedResetBundled.mockResolvedValue({ ok: true });
+    await useLibrary.getState().load();
+
+    await useLibrary.getState().saveProblem(edited);
+    await useLibrary.getState().deleteProblem("two-sum");
+    useLibrary.setState({ hiddenProblems: [edited] });
+    await useLibrary.getState().restoreProblem("two-sum");
+    await useLibrary.getState().resetProblem("two-sum");
+
+    expect(mockedUpdateBundled).toHaveBeenCalledWith(edited);
+    expect(mockedHideBundled).toHaveBeenCalledWith("two-sum");
+    expect(mockedRestoreBundled).toHaveBeenCalledWith("two-sum");
+    expect(mockedResetBundled).toHaveBeenCalledWith("two-sum");
   });
 });

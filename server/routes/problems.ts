@@ -9,10 +9,14 @@ import {
   archiveCustomProblem,
   createCustomProblem,
   getProblem,
+  hideBundledProblem,
   listProblems,
   MAX_LIMIT,
   permanentlyDeleteCustomProblem,
+  resetBundledProblem,
+  restoreBundledProblem,
   restoreCustomProblem,
+  saveProblemOverride,
   updateCustomProblem,
 } from "../services/problems";
 import type { CustomProblemMutationResult, ListProblemsQuery } from "../services/problems";
@@ -84,16 +88,17 @@ function optionalString(value: unknown, field: string, errors: FieldErrors): str
   return trimmed === "" ? undefined : trimmed;
 }
 
-/** Validate and normalize the full custom Problem document accepted by writes. */
-function parseCustomProblem(body: unknown): ParsedProblem {
+/** Validate and normalize the complete Problem document accepted by writes. */
+function parseProblem(body: unknown, origin: Problem["origin"], routeId?: string): ParsedProblem {
   if (!object(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };
   const errors: FieldErrors = {};
   if (!nonEmptyString(body.id)) errors.id = ["A non-empty id is required."];
+  else if (routeId !== undefined && body.id !== routeId) errors.id = ["Must match the route id."];
   if (!nonEmptyString(body.title)) errors.title = ["A non-empty title is required."];
   if (typeof body.difficulty !== "string" || !DIFFICULTIES.has(body.difficulty)) {
     errors.difficulty = ["Must be one of easy, medium, hard."];
   }
-  if (body.origin !== "custom") errors.origin = ["Must be custom."];
+  if (body.origin !== origin) errors.origin = [`Must remain ${origin}.`];
 
   const url = optionalString(body.url, "url", errors);
   const statement = optionalString(body.statement, "statement", errors);
@@ -192,7 +197,7 @@ function parseCustomProblem(body: unknown): ParsedProblem {
       title: (body.title as string).trim(),
       difficulty: body.difficulty as Problem["difficulty"],
       tags: tagValues,
-      origin: "custom",
+      origin,
       ...(url === undefined ? {} : { url }),
       ...(statement === undefined ? {} : { statement }),
       ...(expectedTime === undefined ? {} : { expectedTime }),
@@ -248,7 +253,7 @@ export function createProblemsRouter(db: Db) {
   });
 
   router.post("/", requireUser, async (c) => {
-    const parsed = parseCustomProblem(await c.req.json().catch(() => null));
+    const parsed = parseProblem(await c.req.json().catch(() => null), "custom");
     if (!parsed.ok) {
       return c.json(
         {
@@ -267,7 +272,22 @@ export function createProblemsRouter(db: Db) {
   });
 
   router.patch("/:id", requireUser, async (c) => {
-    const parsed = parseCustomProblem(await c.req.json().catch(() => null));
+    const id = c.req.param("id");
+    const existing = getProblem(db, id, c.var.user!.id);
+    if (existing === null) {
+      return c.json(
+        {
+          error: {
+            code: "NOT_FOUND",
+            message: "Problem not found.",
+            requestId: c.var.requestId,
+          },
+        },
+        404,
+      );
+    }
+    const body = await c.req.json().catch(() => null);
+    const parsed = parseProblem(body, existing.origin, id);
     if (!parsed.ok) {
       return c.json(
         {
@@ -281,7 +301,7 @@ export function createProblemsRouter(db: Db) {
         400,
       );
     }
-    if (parsed.value.id !== c.req.param("id")) {
+    if (parsed.value.id !== id) {
       return c.json(
         {
           error: {
@@ -294,18 +314,48 @@ export function createProblemsRouter(db: Db) {
         400,
       );
     }
+    if (existing.origin === "bundled") {
+      if (!saveProblemOverride(db, c.var.user!.id, parsed.value)) {
+        return c.json(
+          {
+            error: {
+              code: "NOT_FOUND",
+              message: "Bundled Problem not found.",
+              requestId: c.var.requestId,
+            },
+          },
+          404,
+        );
+      }
+      return c.json(parsed.value);
+    }
     const result = updateCustomProblem(db, c.var.user!.id, parsed.value.id, parsed.value);
     return result.kind === "ok" ? c.json(result.problem) : mutationError(c, result);
   });
 
   router.delete("/:id", requireUser, (c) => {
+    const problem = getProblem(db, c.req.param("id"), c.var.user!.id);
+    if (problem?.origin === "bundled") {
+      return hideBundledProblem(db, c.var.user!.id, problem.id)
+        ? c.json({ ok: true })
+        : mutationError(c, { kind: "not-found" });
+    }
     const result = archiveCustomProblem(db, c.var.user!.id, c.req.param("id"));
     return result.kind === "ok" ? c.json(result.problem) : mutationError(c, result);
   });
 
   router.post("/:id/restore", requireUser, (c) => {
+    if (restoreBundledProblem(db, c.var.user!.id, c.req.param("id"))) {
+      return c.json({ ok: true });
+    }
     const result = restoreCustomProblem(db, c.var.user!.id, c.req.param("id"));
     return result.kind === "ok" ? c.json(result.problem) : mutationError(c, result);
+  });
+
+  router.post("/:id/reset", requireUser, (c) => {
+    return resetBundledProblem(db, c.var.user!.id, c.req.param("id"))
+      ? c.json({ ok: true })
+      : mutationError(c, { kind: "not-found" });
   });
 
   router.delete("/:id/permanent", requireUser, (c) => {

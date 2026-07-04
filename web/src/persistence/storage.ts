@@ -122,9 +122,8 @@ export function saveCustomProblem(problem: Problem): void {
 }
 
 /**
- * Drop the Attempts and Personal Bests a Problem owned so they can't dangle
+ * Drop the Attempts and Personal Bests a custom Problem owned so they can't dangle
  * forever — or be silently inherited by a later Problem that reuses this id.
- * Shared by custom deletion and bundled hiding; both destroy the same history.
  */
 function purgeProblemHistory(id: string): void {
   write(
@@ -174,9 +173,8 @@ export function loadHidden(): string[] {
 }
 
 /**
- * Tombstone a bundled Problem so the merged Library hides it. We also drop any
- * override (a hidden Problem has no visible copy to edit) and purge its history,
- * mirroring how deleting a custom Problem clears everything it owned.
+ * Tombstone a bundled Problem so the merged Library hides it. Its Override and
+ * history remain intact so Restore reveals the same personalized Problem.
  */
 export function hideBundledProblem(id: string): void {
   const hidden = loadHidden();
@@ -184,8 +182,14 @@ export function hideBundledProblem(id: string): void {
     hidden.push(id);
     write(KEY_HIDDEN, hidden);
   }
-  clearOverride(id);
-  purgeProblemHistory(id);
+}
+
+/** Remove only the Tombstone, preserving any bundled Override and history. */
+export function restoreBundledProblem(id: string): void {
+  write(
+    KEY_HIDDEN,
+    loadHidden().filter((hiddenId) => hiddenId !== id),
+  );
 }
 
 /**

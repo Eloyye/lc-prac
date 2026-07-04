@@ -1,9 +1,15 @@
 import type { Problem } from "@shared/types";
 import { apiGet, apiJson } from "./client";
 
+export type ProblemPersonalization = {
+  overriddenProblemIds: string[];
+  hiddenProblems: Problem[];
+};
+
 export type ProblemListResponse = {
   problems: Problem[];
   nextCursor: string | null;
+  personalization?: ProblemPersonalization | null;
 };
 
 export type ProblemListParams = {
@@ -44,14 +50,34 @@ export function updateProblem(problem: Problem): Promise<Problem> {
   return apiJson<Problem>("PATCH", `/problems/${encodeURIComponent(problem.id)}`, problem);
 }
 
+/** Upsert the signed-in caller's full bundled-Problem Override. */
+export function updateBundledProblem(problem: Problem): Promise<Problem> {
+  return apiJson<Problem>("PATCH", `/problems/${encodeURIComponent(problem.id)}`, problem);
+}
+
 /** Remove an active custom Problem from the Library without changing its identity. */
 export function archiveProblem(id: string): Promise<Problem> {
   return apiJson<Problem>("DELETE", `/problems/${encodeURIComponent(id)}`);
 }
 
+/** Create the signed-in caller's Tombstone without removing an Override. */
+export function hideBundledProblem(id: string): Promise<{ ok: true }> {
+  return apiJson<{ ok: true }>("DELETE", `/problems/${encodeURIComponent(id)}`);
+}
+
 /** Return an archived custom Problem to the active Library. */
 export function restoreProblem(id: string): Promise<Problem> {
   return apiJson<Problem>("POST", `/problems/${encodeURIComponent(id)}/restore`);
+}
+
+/** Remove only the signed-in caller's Tombstone. */
+export function restoreBundledProblem(id: string): Promise<{ ok: true }> {
+  return apiJson<{ ok: true }>("POST", `/problems/${encodeURIComponent(id)}/restore`);
+}
+
+/** Remove only the signed-in caller's Override. */
+export function resetBundledProblem(id: string): Promise<{ ok: true }> {
+  return apiJson<{ ok: true }>("POST", `/problems/${encodeURIComponent(id)}/reset`);
 }
 
 /** Permanently remove one already-archived custom Problem. */
