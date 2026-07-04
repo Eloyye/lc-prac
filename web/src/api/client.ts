@@ -38,29 +38,7 @@ function buildUrl(path: string, params?: QueryParams): string {
 
 type ApiErrorBody = { error?: { code?: string; message?: string } };
 
-type ApiRequestOptions = {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
-  params?: QueryParams;
-  body?: unknown;
-};
-
-/** Make an API request and parse its JSON body, mapping failures to `ApiError`. */
-export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(buildUrl(path, options.params), {
-      method: options.method ?? "GET",
-      headers: {
-        Accept: "application/json",
-        ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
-      },
-      credentials: "same-origin",
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-    });
-  } catch {
-    throw new ApiError(0, "NETWORK", "Could not reach the server.");
-  }
-
+async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as ApiErrorBody | null;
     throw new ApiError(
@@ -69,11 +47,44 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       body?.error?.message ?? `Request failed with status ${response.status}.`,
     );
   }
-
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
+async function request(path: string, init: RequestInit): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      credentials: "same-origin",
+      ...init,
+    });
+  } catch {
+    throw new ApiError(0, "NETWORK", "Could not reach the server.");
+  }
+  return response;
+}
+
 /** GET `path` and parse a JSON body, mapping failures to `ApiError`. */
-export function apiGet<T>(path: string, params?: QueryParams): Promise<T> {
-  return apiRequest<T>(path, { params });
+export async function apiGet<T>(path: string, params?: QueryParams): Promise<T> {
+  const response = await request(buildUrl(path, params), {
+    headers: { Accept: "application/json" },
+  });
+  return parseResponse<T>(response);
+}
+
+/** Send a JSON mutation and parse its JSON response (or `undefined` for 204). */
+export async function apiJson<T>(
+  method: "POST" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const response = await request(buildUrl(path), {
+    method,
+    headers: {
+      Accept: "application/json",
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  return parseResponse<T>(response);
 }

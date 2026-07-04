@@ -2,12 +2,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Problem } from "@shared/types";
 import { ApiError } from "./client";
 import {
+  archiveProblem,
+  createProblem,
   getProblem,
   hideBundledProblem,
   listProblems,
+  permanentlyDeleteProblem,
   resetBundledProblem,
   restoreBundledProblem,
+  restoreProblem,
   updateBundledProblem,
+  updateProblem,
 } from "./problems";
 
 const twoSum: Problem = {
@@ -19,9 +24,9 @@ const twoSum: Problem = {
   solutions: [],
 };
 
-function stubFetch(impl: (url: string, init?: RequestInit) => Response | Promise<Response>) {
-  const fn = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
-    Promise.resolve(impl(String(input), init)),
+function stubFetch(impl: (url: string) => Response | Promise<Response>) {
+  const fn = vi.fn((input: RequestInfo | URL, _init?: RequestInit) =>
+    Promise.resolve(impl(String(input))),
   );
   vi.stubGlobal("fetch", fn);
   return fn;
@@ -105,18 +110,53 @@ describe("getProblem", () => {
   });
 });
 
+describe("custom Problem mutations", () => {
+  const custom: Problem = { ...twoSum, id: "custom/id", origin: "custom" };
+
+  it("creates and updates complete custom Problems as JSON", async () => {
+    const fetchSpy = stubFetch(() => jsonResponse(custom));
+
+    await createProblem(custom);
+    await updateProblem(custom);
+
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("/api/problems");
+    expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify(custom),
+    });
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe("/api/problems/custom%2Fid");
+    expect(fetchSpy.mock.calls[1]?.[1]).toMatchObject({ method: "PATCH" });
+  });
+
+  it("uses distinct archive, restore, and permanent-delete endpoints", async () => {
+    const fetchSpy = stubFetch((url) =>
+      url.endsWith("/permanent") ? new Response(null, { status: 204 }) : jsonResponse(custom),
+    );
+
+    await archiveProblem(custom.id);
+    await restoreProblem(custom.id);
+    await permanentlyDeleteProblem(custom.id);
+
+    expect(fetchSpy.mock.calls.map((call) => [call[0], call[1]?.method])).toEqual([
+      ["/api/problems/custom%2Fid", "DELETE"],
+      ["/api/problems/custom%2Fid/restore", "POST"],
+      ["/api/problems/custom%2Fid/permanent", "DELETE"],
+    ]);
+  });
+});
+
 describe("bundled personalization mutations", () => {
   it("PATCHes a complete Override snapshot as JSON", async () => {
-    const fetchSpy = stubFetch(() => jsonResponse({ problem: twoSum }));
+    const fetchSpy = stubFetch(() => jsonResponse(twoSum));
 
-    await updateBundledProblem("two/sum", twoSum);
+    await updateBundledProblem({ ...twoSum, id: "two/sum" });
 
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/problems/two%2Fsum",
       expect.objectContaining({
         method: "PATCH",
         credentials: "same-origin",
-        body: JSON.stringify(twoSum),
+        body: JSON.stringify({ ...twoSum, id: "two/sum" }),
       }),
     );
   });

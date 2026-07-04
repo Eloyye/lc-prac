@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d01a72ab-4297-4042-8a4e-cbf10293dc41",
-  "prevId": "5a12087a-eae9-463d-aab2-4ae94ba8dbdb",
+  "id": "c751f3e6-5610-416b-b81b-d69ffee4ce0e",
+  "prevId": "d01a72ab-4297-4042-8a4e-cbf10293dc41",
   "tables": {
     "account": {
       "name": "account",
@@ -195,6 +195,79 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "problem_overrides": {
+      "name": "problem_overrides",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bundled_problem_id": {
+          "name": "bundled_problem_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "snapshot_json": {
+          "name": "snapshot_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at_ms": {
+          "name": "updated_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "problem_overrides_user_id_user_id_fk": {
+          "name": "problem_overrides_user_id_user_id_fk",
+          "tableFrom": "problem_overrides",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "problem_overrides_bundled_problem_id_problems_id_fk": {
+          "name": "problem_overrides_bundled_problem_id_problems_id_fk",
+          "tableFrom": "problem_overrides",
+          "tableTo": "problems",
+          "columnsFrom": [
+            "bundled_problem_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "problem_overrides_user_id_bundled_problem_id_pk": {
+          "columns": [
+            "user_id",
+            "bundled_problem_id"
+          ],
+          "name": "problem_overrides_user_id_bundled_problem_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "problem_tags": {
       "name": "problem_tags",
       "columns": {
@@ -257,6 +330,72 @@
             "tag_id"
           ],
           "name": "problem_tags_problem_id_tag_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "problem_tombstones": {
+      "name": "problem_tombstones",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bundled_problem_id": {
+          "name": "bundled_problem_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hidden_at_ms": {
+          "name": "hidden_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "problem_tombstones_user_id_user_id_fk": {
+          "name": "problem_tombstones_user_id_user_id_fk",
+          "tableFrom": "problem_tombstones",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "problem_tombstones_bundled_problem_id_problems_id_fk": {
+          "name": "problem_tombstones_bundled_problem_id_problems_id_fk",
+          "tableFrom": "problem_tombstones",
+          "tableTo": "problems",
+          "columnsFrom": [
+            "bundled_problem_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "problem_tombstones_user_id_bundled_problem_id_pk": {
+          "columns": [
+            "user_id",
+            "bundled_problem_id"
+          ],
+          "name": "problem_tombstones_user_id_bundled_problem_id_pk"
         }
       },
       "uniqueConstraints": {},

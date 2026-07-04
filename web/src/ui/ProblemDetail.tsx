@@ -47,8 +47,8 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
   const deleteProblem = useLibrary((s) => s.deleteProblem);
   const resetProblem = useLibrary((s) => s.resetProblem);
   const overriddenProblemIds = useLibrary((s) => s.overriddenProblemIds);
+  const actionError = useLibrary((s) => s.actionError);
   const [editing, setEditing] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
 
   const attempts = recentAttemptsForProblem(problem.id);
   // Attempts only store a solutionId; resolve the approach from the Problem's
@@ -59,35 +59,23 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
   // A bundled Problem can be reverted only once the user has actually edited it.
   const canReset = problem.origin === "bundled" && overriddenProblemIds.includes(problem.id);
 
-  const handleDelete = async (): Promise<void> => {
-    const bundled = problem.origin === "bundled";
-    if (
-      window.confirm(
-        bundled
-          ? `Hide "${problem.title}"? You can restore it from the Library later.`
-          : `Delete "${problem.title}"? This also removes its attempts and personal bests.`,
-      )
-    ) {
-      setActionError(null);
-      try {
-        await deleteProblem(problem.id);
-        navigate({ to: "/problems", search });
-      } catch (cause) {
-        setActionError(cause instanceof Error ? cause.message : "Could not update the Problem.");
-      }
+  const handleDelete = (): void => {
+    const message =
+      problem.origin === "custom"
+        ? `Archive "${problem.title}"? You can restore it later.`
+        : `Hide "${problem.title}"? You can restore it later.`;
+    if (window.confirm(message)) {
+      void deleteProblem(problem.id)
+        .then(() => navigate({ to: "/problems", search }))
+        .catch(() => {});
     }
   };
 
-  const handleReset = async (): Promise<void> => {
+  const handleReset = (): void => {
     if (
       window.confirm(`Reset "${problem.title}" to the original version? Your edits are discarded.`)
     ) {
-      setActionError(null);
-      try {
-        await resetProblem(problem.id);
-      } catch (cause) {
-        setActionError(cause instanceof Error ? cause.message : "Could not reset the Problem.");
-      }
+      void resetProblem(problem.id).catch(() => {});
     }
   };
 
@@ -98,7 +86,7 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
     { label: "Edit", onClick: () => setEditing(true) },
     ...(canReset ? [{ label: "Reset to original", onClick: handleReset }] : []),
     {
-      label: problem.origin === "bundled" ? "Hide" : "Delete",
+      label: problem.origin === "custom" ? "Archive" : "Hide",
       variant: "danger",
       onClick: handleDelete,
     },
@@ -134,8 +122,6 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
           </div>
         </div>
 
-        {actionError !== null && <p className="mt-3 text-sm text-rose-400">{actionError}</p>}
-
         <header className="mt-4 mb-8">
           <h1 className="text-2xl font-semibold">{problem.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
@@ -162,6 +148,8 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
             </a>
           )}
         </header>
+
+        {actionError !== null && <p className="mb-6 text-sm text-rose-400">{actionError}</p>}
 
         {problem.statement !== undefined && (
           <section className="mb-8">

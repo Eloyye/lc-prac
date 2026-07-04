@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import type { Example, Problem, Solution } from "../../shared/types";
 import { filterProblems } from "../../shared/content/filter";
 import type { Db } from "../db/client";
@@ -34,9 +34,16 @@ export type ProblemPersonalization = {
   hiddenProblems: Problem[];
 };
 
+export type CustomProblemMutationResult =
+  | { kind: "ok"; problem: Problem }
+  | { kind: "not-found" }
+  | { kind: "conflict" };
+
 /** Page size when the caller does not specify `limit`; also the hard ceiling. */
 export const DEFAULT_LIMIT = 50;
 export const MAX_LIMIT = 100;
+
+const tagId = (name: string): string => `tag:${name}`;
 
 function toSolutionDto(row: SolutionRow): Solution {
   const solution: Solution = {
@@ -45,8 +52,6 @@ function toSolutionDto(row: SolutionRow): Solution {
     approach: row.approach,
     code: row.code,
   };
-  // Optional fields are omitted (not set to undefined) so a DTO round-trips to
-  // the exact shape of the bundled source.
   if (row.timeComplexity !== null) solution.timeComplexity = row.timeComplexity;
   if (row.spaceComplexity !== null) solution.spaceComplexity = row.spaceComplexity;
   return solution;
@@ -76,34 +81,24 @@ function toProblemDto(
   if (row.statement !== null) problem.statement = row.statement;
   if (row.expectedTime !== null) problem.expectedTime = row.expectedTime;
   if (row.expectedSpace !== null) problem.expectedSpace = row.expectedSpace;
-  // The bundled source omits `examples` entirely when there are none; match that.
   if (rowExamples.length > 0) problem.examples = rowExamples.map(toExampleDto);
   return problem;
 }
 
-/** Group child rows by `problemId` into a Map, preserving query order. */
 function groupBy<T extends { problemId: string }>(rows: T[]): Map<string, T[]> {
   const byProblem = new Map<string, T[]>();
   for (const row of rows) {
     const list = byProblem.get(row.problemId);
-    if (list === undefined) {
-      byProblem.set(row.problemId, [row]);
-    } else {
-      list.push(row);
-    }
+    if (list === undefined) byProblem.set(row.problemId, [row]);
+    else list.push(row);
   }
   return byProblem;
 }
 
-/**
- * Assemble full Problem DTOs for the given Problem rows, loading their Solutions,
- * examples, and tags in three batched queries (no per-Problem N+1). Children are
- * ordered by their stored `sortOrder` so authored ordering is preserved.
- */
+/** Load child collections in batches and assemble complete Problem DTOs. */
 function assembleProblems(db: Db, rows: ProblemRow[]): Problem[] {
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
-
   const solutionRows = db
     .select()
     .from(solutions)
@@ -127,7 +122,6 @@ function assembleProblems(db: Db, rows: ProblemRow[]): Problem[] {
   const solutionsByProblem = groupBy(solutionRows);
   const examplesByProblem = groupBy(exampleRows);
   const tagsByProblem = groupBy(tagRows);
-
   return rows.map((row) =>
     toProblemDto(
       row,
@@ -138,15 +132,13 @@ function assembleProblems(db: Db, rows: ProblemRow[]): Problem[] {
   );
 }
 
-/** Active bundled Problems in authored Library order (the anonymous read model). */
-function loadActiveBundledProblems(db: Db): Problem[] {
-  const rows = db
+function loadBundledRows(db: Db): ProblemRow[] {
+  return db
     .select()
     .from(problems)
     .where(and(eq(problems.origin, "bundled"), isNull(problems.archivedAtMs)))
     .orderBy(problems.createdAtMs, problems.id)
     .all();
-  return assembleProblems(db, rows);
 }
 
 function loadPersonalization(
@@ -164,13 +156,11 @@ function loadPersonalization(
     .from(problemTombstones)
     .where(eq(problemTombstones.userId, userId))
     .all();
-
   const overrides = new Map(
     overrideRows.map((row) => [row.bundledProblemId, JSON.parse(row.snapshotJson) as Problem]),
   );
   const hiddenIds = new Set(tombstoneRows.map((row) => row.bundledProblemId));
   const effective = bundled.map((problem) => overrides.get(problem.id) ?? problem);
-
   return {
     active: effective.filter((problem) => !hiddenIds.has(problem.id)),
     metadata: {
@@ -180,28 +170,38 @@ function loadPersonalization(
   };
 }
 
-/**
- * The caller's effective Library list. For anonymous callers this is the pristine
- * bundled Library; the `q` / `difficulty` / `tag` / `origin` filters use the same
- * semantics as the client's `filterProblems`, and `limit` / `cursor` paginate the
- * filtered result. `nextCursor` is the id to pass as the next `cursor`, or null
- * when the page is the last one.
- */
+function loadOwnedCustomRows(
+  db: Db,
+  userId: string | undefined,
+  status: "active" | "archived",
+): ProblemRow[] {
+  if (userId === undefined) return [];
+  return db
+    .select()
+    .from(problems)
+    .where(
+      and(
+        eq(problems.origin, "custom"),
+        eq(problems.ownerUserId, userId),
+        status === "active" ? isNull(problems.archivedAtMs) : isNotNull(problems.archivedAtMs),
+      ),
+    )
+    .orderBy(problems.createdAtMs, problems.id)
+    .all();
+}
+
+/** The effective active Library, or the caller's archived custom Problems. */
 export function listProblems(
   db: Db,
   query: ListProblemsQuery = {},
   userId?: string,
 ): ProblemListResult {
-  // Archived bundled Problems do not exist (only custom Problems archive), so an
-  // explicit `status=archived` request yields nothing for the anonymous library.
-  if (query.status === "archived") {
-    return { problems: [], nextCursor: null, personalization: null };
-  }
-
-  const bundled = loadActiveBundledProblems(db);
-  const personalized = userId === undefined ? null : loadPersonalization(db, bundled, userId);
-  const all = personalized?.active ?? bundled;
-  let filtered = filterProblems(all, {
+  const status = query.status ?? "active";
+  const bundled = status === "active" ? assembleProblems(db, loadBundledRows(db)) : [];
+  const personalized =
+    status === "active" && userId !== undefined ? loadPersonalization(db, bundled, userId) : null;
+  const custom = assembleProblems(db, loadOwnedCustomRows(db, userId, status));
+  let filtered = filterProblems([...(personalized?.active ?? bundled), ...custom], {
     query: query.q ?? "",
     difficulty: query.difficulty ?? "all",
     tag: query.tag ?? null,
@@ -211,30 +211,30 @@ export function listProblems(
   }
 
   const limit = Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
-  // An unknown cursor (e.g. a since-removed Problem) restarts from the top rather
-  // than erroring — the list endpoint stays resilient to stale links.
-  const startIndex =
-    query.cursor !== undefined ? filtered.findIndex((p) => p.id === query.cursor) + 1 : 0;
+  const cursorIndex =
+    query.cursor === undefined ? -1 : filtered.findIndex((p) => p.id === query.cursor);
+  const startIndex = cursorIndex + 1;
   const page = filtered.slice(startIndex, startIndex + limit);
   const reachedEnd = startIndex + page.length >= filtered.length;
-  const nextCursor = reachedEnd || page.length === 0 ? null : page[page.length - 1]!.id;
-
-  return { problems: page, nextCursor, personalization: personalized?.metadata ?? null };
+  return {
+    problems: page,
+    nextCursor: reachedEnd || page.length === 0 ? null : page[page.length - 1]!.id,
+    personalization: personalized?.metadata ?? null,
+  };
 }
 
-/**
- * One readable effective Problem by its logical id, or null when no active
- * bundled Problem has that id (a bad URL, or a future Tombstoned/archived one).
- */
+/** One effective active Problem readable by the caller. */
 export function getProblem(db: Db, id: string, userId?: string): Problem | null {
-  const row = db
-    .select()
-    .from(problems)
-    .where(and(eq(problems.id, id), eq(problems.origin, "bundled"), isNull(problems.archivedAtMs)))
-    .get();
-  if (row === undefined) return null;
-  const bundled = assembleProblems(db, [row])[0] ?? null;
-  if (bundled === null || userId === undefined) return bundled;
+  const row = db.select().from(problems).where(eq(problems.id, id)).get();
+  if (
+    row === undefined ||
+    row.archivedAtMs !== null ||
+    (row.origin === "custom" && row.ownerUserId !== userId)
+  ) {
+    return null;
+  }
+  const problem = assembleProblems(db, [row])[0] ?? null;
+  if (problem === null || row.origin === "custom" || userId === undefined) return problem;
 
   const tombstone = db
     .select({ id: problemTombstones.bundledProblemId })
@@ -248,7 +248,7 @@ export function getProblem(db: Db, id: string, userId?: string): Problem | null 
     .from(problemOverrides)
     .where(and(eq(problemOverrides.userId, userId), eq(problemOverrides.bundledProblemId, id)))
     .get();
-  return override === undefined ? bundled : (JSON.parse(override.snapshotJson) as Problem);
+  return override === undefined ? problem : (JSON.parse(override.snapshotJson) as Problem);
 }
 
 function bundledProblemExists(db: Db, id: string): boolean {
@@ -305,5 +305,181 @@ export function resetBundledProblem(db: Db, userId: string, id: string): boolean
   db.delete(problemOverrides)
     .where(and(eq(problemOverrides.userId, userId), eq(problemOverrides.bundledProblemId, id)))
     .run();
+  return true;
+}
+
+function ownedCustomRow(db: Db, id: string, userId: string): ProblemRow | undefined {
+  return db
+    .select()
+    .from(problems)
+    .where(
+      and(eq(problems.id, id), eq(problems.origin, "custom"), eq(problems.ownerUserId, userId)),
+    )
+    .get();
+}
+
+function replaceChildren(db: Db, problem: Problem, now: number): void {
+  db.delete(solutions).where(eq(solutions.problemId, problem.id)).run();
+  db.delete(problemExamples).where(eq(problemExamples.problemId, problem.id)).run();
+  db.delete(problemTags).where(eq(problemTags.problemId, problem.id)).run();
+
+  problem.solutions.forEach((solution, index) => {
+    db.insert(solutions)
+      .values({
+        id: solution.id,
+        problemId: problem.id,
+        lang: solution.lang,
+        approach: solution.approach,
+        code: solution.code,
+        timeComplexity: solution.timeComplexity ?? null,
+        spaceComplexity: solution.spaceComplexity ?? null,
+        sortOrder: index,
+        createdAtMs: now,
+        updatedAtMs: now,
+      })
+      .run();
+  });
+  (problem.examples ?? []).forEach((example, index) => {
+    db.insert(problemExamples)
+      .values({
+        id: `${problem.id}-example-${index}`,
+        problemId: problem.id,
+        input: example.input,
+        output: example.output,
+        explanation: example.explanation ?? null,
+        sortOrder: index,
+      })
+      .run();
+  });
+  problem.tags.forEach((name, index) => {
+    db.insert(tags)
+      .values({ id: tagId(name), name })
+      .onConflictDoNothing()
+      .run();
+    db.insert(problemTags)
+      .values({ problemId: problem.id, tagId: tagId(name), sortOrder: index })
+      .run();
+  });
+}
+
+/** Create a complete custom Problem owned by the authenticated caller. */
+export function createCustomProblem(
+  db: Db,
+  userId: string,
+  problem: Problem,
+  now = Date.now(),
+): CustomProblemMutationResult {
+  if (db.select({ id: problems.id }).from(problems).where(eq(problems.id, problem.id)).get()) {
+    return { kind: "conflict" };
+  }
+  const childIds = problem.solutions.map((solution) => solution.id);
+  if (
+    childIds.length > 0 &&
+    db.select({ id: solutions.id }).from(solutions).where(inArray(solutions.id, childIds)).get()
+  ) {
+    return { kind: "conflict" };
+  }
+
+  db.transaction((tx) => {
+    tx.insert(problems)
+      .values({
+        id: problem.id,
+        slug: null,
+        title: problem.title,
+        difficulty: problem.difficulty,
+        origin: "custom",
+        ownerUserId: userId,
+        url: problem.url ?? null,
+        statement: problem.statement ?? null,
+        expectedTime: problem.expectedTime ?? null,
+        expectedSpace: problem.expectedSpace ?? null,
+        archivedAtMs: null,
+        createdAtMs: now,
+        updatedAtMs: now,
+      })
+      .run();
+    replaceChildren(tx as Db, problem, now);
+  });
+  return { kind: "ok", problem };
+}
+
+/** Replace the complete editable content of one active, owned custom Problem. */
+export function updateCustomProblem(
+  db: Db,
+  userId: string,
+  id: string,
+  problem: Problem,
+  now = Date.now(),
+): CustomProblemMutationResult {
+  const row = ownedCustomRow(db, id, userId);
+  if (row === undefined || row.archivedAtMs !== null) return { kind: "not-found" };
+  const childIds = problem.solutions.map((solution) => solution.id);
+  const conflictingSolution =
+    childIds.length === 0
+      ? undefined
+      : db
+          .select({ id: solutions.id, problemId: solutions.problemId })
+          .from(solutions)
+          .where(inArray(solutions.id, childIds))
+          .all()
+          .find((solution) => solution.problemId !== id);
+  if (conflictingSolution !== undefined) return { kind: "conflict" };
+
+  db.transaction((tx) => {
+    tx.update(problems)
+      .set({
+        title: problem.title,
+        difficulty: problem.difficulty,
+        url: problem.url ?? null,
+        statement: problem.statement ?? null,
+        expectedTime: problem.expectedTime ?? null,
+        expectedSpace: problem.expectedSpace ?? null,
+        updatedAtMs: now,
+      })
+      .where(eq(problems.id, id))
+      .run();
+    replaceChildren(tx as Db, problem, now);
+  });
+  return { kind: "ok", problem };
+}
+
+export function archiveCustomProblem(
+  db: Db,
+  userId: string,
+  id: string,
+  now = Date.now(),
+): CustomProblemMutationResult {
+  const row = ownedCustomRow(db, id, userId);
+  if (row === undefined || row.archivedAtMs !== null) return { kind: "not-found" };
+  db.update(problems).set({ archivedAtMs: now, updatedAtMs: now }).where(eq(problems.id, id)).run();
+  return {
+    kind: "ok",
+    problem: assembleProblems(db, [{ ...row, archivedAtMs: now, updatedAtMs: now }])[0]!,
+  };
+}
+
+export function restoreCustomProblem(
+  db: Db,
+  userId: string,
+  id: string,
+  now = Date.now(),
+): CustomProblemMutationResult {
+  const row = ownedCustomRow(db, id, userId);
+  if (row === undefined || row.archivedAtMs === null) return { kind: "not-found" };
+  db.update(problems)
+    .set({ archivedAtMs: null, updatedAtMs: now })
+    .where(eq(problems.id, id))
+    .run();
+  return {
+    kind: "ok",
+    problem: assembleProblems(db, [{ ...row, archivedAtMs: null, updatedAtMs: now }])[0]!,
+  };
+}
+
+/** Delete only an already-archived custom Problem owned by the caller. */
+export function permanentlyDeleteCustomProblem(db: Db, userId: string, id: string): boolean {
+  const row = ownedCustomRow(db, id, userId);
+  if (row === undefined || row.archivedAtMs === null) return false;
+  db.delete(problems).where(eq(problems.id, id)).run();
   return true;
 }

@@ -10,11 +10,14 @@ import { runMigrations } from "../db/migrate";
 import { seedBundledProblems } from "../db/seed";
 
 const logger = pino({ level: "silent" });
+const ORIGIN = "http://localhost:3000";
+const SECRET = "test-secret-that-is-at-least-32-characters";
+const PASSWORD = "correct-horse-battery-staple";
 
 type ProblemListBody = {
   problems: Problem[];
   nextCursor: string | null;
-  personalization: {
+  personalization?: {
     overriddenProblemIds: string[];
     hiddenProblems: Problem[];
   } | null;
@@ -30,42 +33,6 @@ type ApiErrorBody = {
 
 let conn: DbConnection;
 let app: ReturnType<typeof createApp>;
-
-const ORIGIN = "http://localhost:3000";
-const SECRET = "test-secret-that-is-at-least-32-characters";
-const PASSWORD = "correct-horse-battery-staple";
-
-function cookieFrom(response: Response): string {
-  const setCookie = response.headers.get("set-cookie");
-  if (setCookie === null) throw new Error("Expected a session cookie");
-  return setCookie.split(";", 1)[0];
-}
-
-async function signUp(email: string): Promise<string> {
-  const response = await app.request("/api/auth/sign-up/email", {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: ORIGIN },
-    body: JSON.stringify({ name: email.split("@")[0], email, password: PASSWORD }),
-  });
-  expect(response.status).toBe(200);
-  return cookieFrom(response);
-}
-
-async function authenticatedRequest(
-  cookie: string,
-  path: string,
-  method: "GET" | "POST" | "PATCH" | "DELETE" = "GET",
-  body?: unknown,
-): Promise<Response> {
-  return await app.request(path, {
-    method,
-    headers: {
-      cookie,
-      ...(body === undefined ? {} : { "content-type": "application/json" }),
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-}
 
 beforeEach(() => {
   conn = openDatabase(":memory:");
@@ -85,6 +52,60 @@ afterEach(() => {
 });
 
 const ids = (body: ProblemListBody): string[] => body.problems.map((p) => p.id);
+
+function cookieFrom(response: Response): string {
+  const setCookie = response.headers.get("set-cookie");
+  if (setCookie === null) throw new Error("Expected a session cookie");
+  return setCookie.split(";", 1)[0];
+}
+
+async function signUp(name: string, email: string): Promise<string> {
+  const response = await app.request("/api/auth/sign-up/email", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: ORIGIN },
+    body: JSON.stringify({ name, email, password: PASSWORD }),
+  });
+  expect(response.status).toBe(200);
+  return cookieFrom(response);
+}
+
+async function requestWithCookie(
+  path: string,
+  cookie: string,
+  method = "GET",
+  body?: unknown,
+): Promise<Response> {
+  return await app.request(path, {
+    method,
+    headers: {
+      cookie,
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+const customProblem: Problem = {
+  id: "custom-ada",
+  title: "Count Letters",
+  difficulty: "medium",
+  tags: ["String", "hash-map"],
+  origin: "custom",
+  statement: "Count every **letter**.",
+  expectedTime: "O(n)",
+  expectedSpace: "O(k)",
+  examples: [{ input: '"aba"', output: '{"a": 2, "b": 1}', explanation: "Count each." }],
+  solutions: [
+    {
+      id: "custom-ada-solution",
+      lang: "python",
+      approach: "Frequency map",
+      code: "def count_letters(value):\n    return Counter(value)",
+      timeComplexity: "O(n)",
+      spaceComplexity: "O(k)",
+    },
+  ],
+};
 
 describe("GET /api/problems", () => {
   it("returns the pristine bundled Library in authored order with a request id", async () => {
@@ -179,6 +200,123 @@ describe("GET /api/problems/:id", () => {
   });
 });
 
+describe("authenticated custom Problem lifecycle", () => {
+  it("requires authentication for every mutation", async () => {
+    expect((await app.request("/api/problems", { method: "POST", body: "{}" })).status).toBe(401);
+    expect(
+      (await app.request("/api/problems/missing", { method: "PATCH", body: "{}" })).status,
+    ).toBe(401);
+    expect((await app.request("/api/problems/missing", { method: "DELETE" })).status).toBe(401);
+    expect((await app.request("/api/problems/missing/restore", { method: "POST" })).status).toBe(
+      401,
+    );
+    expect(
+      (await app.request("/api/problems/missing/permanent", { method: "DELETE" })).status,
+    ).toBe(401);
+  });
+
+  it("creates and edits every custom Problem content surface", async () => {
+    const cookie = await signUp("Ada", "ada-problems@example.com");
+    const created = await requestWithCookie("/api/problems", cookie, "POST", customProblem);
+
+    expect(created.status).toBe(201);
+    const normalized = { ...customProblem, tags: ["string", "hash-map"] };
+    expect(await created.json()).toEqual(normalized);
+
+    const edited: Problem = {
+      ...normalized,
+      title: "Count Unicode Letters",
+      statement: "Count every Unicode code point.",
+      examples: [{ input: '"åå"', output: '{"å": 2}' }],
+      solutions: [
+        ...normalized.solutions,
+        {
+          id: "custom-ada-solution-2",
+          lang: "python",
+          approach: "Manual map",
+          code: "def count_letters(value):\n    counts = {}\n    return counts",
+        },
+      ],
+    };
+    const updated = await requestWithCookie(
+      `/api/problems/${customProblem.id}`,
+      cookie,
+      "PATCH",
+      edited,
+    );
+
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toEqual(edited);
+    expect(
+      await (await requestWithCookie(`/api/problems/${customProblem.id}`, cookie)).json(),
+    ).toEqual(edited);
+  });
+
+  it("isolates active and archived custom Problems between two users", async () => {
+    const ada = await signUp("Ada", "ada-isolation@example.com");
+    const grace = await signUp("Grace", "grace-isolation@example.com");
+    expect((await requestWithCookie("/api/problems", ada, "POST", customProblem)).status).toBe(201);
+
+    const adaActive = (await (
+      await requestWithCookie("/api/problems", ada)
+    ).json()) as ProblemListBody;
+    const graceActive = (await (
+      await requestWithCookie("/api/problems", grace)
+    ).json()) as ProblemListBody;
+    const anonymousActive = (await (await app.request("/api/problems")).json()) as ProblemListBody;
+    expect(ids(adaActive)).toContain(customProblem.id);
+    expect(ids(graceActive)).not.toContain(customProblem.id);
+    expect(ids(anonymousActive)).not.toContain(customProblem.id);
+    expect((await requestWithCookie(`/api/problems/${customProblem.id}`, grace)).status).toBe(404);
+    expect(
+      (await requestWithCookie(`/api/problems/${customProblem.id}`, grace, "DELETE")).status,
+    ).toBe(404);
+
+    expect(
+      (await requestWithCookie(`/api/problems/${customProblem.id}`, ada, "DELETE")).status,
+    ).toBe(200);
+    const adaArchived = (await (
+      await requestWithCookie("/api/problems?status=archived", ada)
+    ).json()) as ProblemListBody;
+    const graceArchived = (await (
+      await requestWithCookie("/api/problems?status=archived", grace)
+    ).json()) as ProblemListBody;
+    expect(adaArchived.problems).toEqual([{ ...customProblem, tags: ["string", "hash-map"] }]);
+    expect(graceArchived.problems).toEqual([]);
+    expect((await requestWithCookie(`/api/problems/${customProblem.id}`, ada)).status).toBe(404);
+  });
+
+  it("restores identity and permits permanent deletion only while archived", async () => {
+    const cookie = await signUp("Ada", "ada-lifecycle@example.com");
+    await requestWithCookie("/api/problems", cookie, "POST", customProblem);
+
+    expect(
+      (await requestWithCookie(`/api/problems/${customProblem.id}/permanent`, cookie, "DELETE"))
+        .status,
+    ).toBe(404);
+    await requestWithCookie(`/api/problems/${customProblem.id}`, cookie, "DELETE");
+    const restored = await requestWithCookie(
+      `/api/problems/${customProblem.id}/restore`,
+      cookie,
+      "POST",
+    );
+    expect(restored.status).toBe(200);
+    expect(await restored.json()).toEqual({ ...customProblem, tags: ["string", "hash-map"] });
+
+    await requestWithCookie(`/api/problems/${customProblem.id}`, cookie, "DELETE");
+    const removed = await requestWithCookie(
+      `/api/problems/${customProblem.id}/permanent`,
+      cookie,
+      "DELETE",
+    );
+    expect(removed.status).toBe(204);
+    const archived = (await (
+      await requestWithCookie("/api/problems?status=archived", cookie)
+    ).json()) as ProblemListBody;
+    expect(archived.problems).toEqual([]);
+  });
+});
+
 describe("bundled Problem personalization", () => {
   const original = PROBLEMS.find((problem) => problem.id === "two-sum")!;
   const edited: Problem = {
@@ -196,33 +334,30 @@ describe("bundled Problem personalization", () => {
   };
 
   it("isolates Overrides and Tombstones between two users and the global bundle", async () => {
-    const ada = await signUp("ada-problems@example.com");
-    const grace = await signUp("grace-problems@example.com");
+    const ada = await signUp("Ada", "ada-bundled@example.com");
+    const grace = await signUp("Grace", "grace-bundled@example.com");
 
-    const update = await authenticatedRequest(ada, "/api/problems/two-sum", "PATCH", edited);
+    const update = await requestWithCookie("/api/problems/two-sum", ada, "PATCH", edited);
     expect(update.status).toBe(200);
-    expect((await update.json()) as unknown).toEqual({ problem: edited });
-
-    expect(await (await authenticatedRequest(ada, "/api/problems/two-sum")).json()).toEqual(edited);
-    expect(await (await authenticatedRequest(grace, "/api/problems/two-sum")).json()).toEqual(
+    expect(await update.json()).toEqual(edited);
+    expect(await (await requestWithCookie("/api/problems/two-sum", ada)).json()).toEqual(edited);
+    expect(await (await requestWithCookie("/api/problems/two-sum", grace)).json()).toEqual(
       original,
     );
 
-    expect((await authenticatedRequest(grace, "/api/problems/two-sum", "DELETE")).status).toBe(200);
-    expect((await authenticatedRequest(grace, "/api/problems/two-sum")).status).toBe(404);
-    expect((await authenticatedRequest(ada, "/api/problems/two-sum")).status).toBe(200);
-
-    // Neither user's private rows mutate the globally readable bundled Problem.
+    expect((await requestWithCookie("/api/problems/two-sum", grace, "DELETE")).status).toBe(200);
+    expect((await requestWithCookie("/api/problems/two-sum", grace)).status).toBe(404);
+    expect((await requestWithCookie("/api/problems/two-sum", ada)).status).toBe(200);
     expect(await (await app.request("/api/problems/two-sum")).json()).toEqual(original);
   });
 
   it("retains an Override while hidden and restores that same snapshot", async () => {
-    const cookie = await signUp("restore@example.com");
-    await authenticatedRequest(cookie, "/api/problems/two-sum", "PATCH", edited);
-    await authenticatedRequest(cookie, "/api/problems/two-sum", "DELETE");
+    const cookie = await signUp("Restore", "restore-bundled@example.com");
+    await requestWithCookie("/api/problems/two-sum", cookie, "PATCH", edited);
+    await requestWithCookie("/api/problems/two-sum", cookie, "DELETE");
 
     const hiddenList = (await (
-      await authenticatedRequest(cookie, "/api/problems")
+      await requestWithCookie("/api/problems", cookie)
     ).json()) as ProblemListBody;
     expect(ids(hiddenList)).not.toContain("two-sum");
     expect(hiddenList.personalization).toEqual({
@@ -230,24 +365,22 @@ describe("bundled Problem personalization", () => {
       hiddenProblems: [edited],
     });
 
-    expect(
-      (await authenticatedRequest(cookie, "/api/problems/two-sum/restore", "POST")).status,
-    ).toBe(200);
-    expect(await (await authenticatedRequest(cookie, "/api/problems/two-sum")).json()).toEqual(
-      edited,
+    expect((await requestWithCookie("/api/problems/two-sum/restore", cookie, "POST")).status).toBe(
+      200,
     );
+    expect(await (await requestWithCookie("/api/problems/two-sum", cookie)).json()).toEqual(edited);
   });
 
   it("resets only the Override while leaving the Tombstone in place", async () => {
-    const cookie = await signUp("reset@example.com");
-    await authenticatedRequest(cookie, "/api/problems/two-sum", "PATCH", edited);
-    await authenticatedRequest(cookie, "/api/problems/two-sum", "DELETE");
+    const cookie = await signUp("Reset", "reset-bundled@example.com");
+    await requestWithCookie("/api/problems/two-sum", cookie, "PATCH", edited);
+    await requestWithCookie("/api/problems/two-sum", cookie, "DELETE");
 
-    expect((await authenticatedRequest(cookie, "/api/problems/two-sum/reset", "POST")).status).toBe(
+    expect((await requestWithCookie("/api/problems/two-sum/reset", cookie, "POST")).status).toBe(
       200,
     );
     const stillHidden = (await (
-      await authenticatedRequest(cookie, "/api/problems")
+      await requestWithCookie("/api/problems", cookie)
     ).json()) as ProblemListBody;
     expect(ids(stillHidden)).not.toContain("two-sum");
     expect(stillHidden.personalization).toEqual({
@@ -255,17 +388,16 @@ describe("bundled Problem personalization", () => {
       hiddenProblems: [original],
     });
 
-    await authenticatedRequest(cookie, "/api/problems/two-sum/restore", "POST");
-    expect(await (await authenticatedRequest(cookie, "/api/problems/two-sum")).json()).toEqual(
+    await requestWithCookie("/api/problems/two-sum/restore", cookie, "POST");
+    expect(await (await requestWithCookie("/api/problems/two-sum", cookie)).json()).toEqual(
       original,
     );
   });
 
-  it("rejects anonymous writes and invalid snapshots", async () => {
+  it("rejects anonymous writes and preserves bundled provenance", async () => {
     expect((await app.request("/api/problems/two-sum", { method: "DELETE" })).status).toBe(401);
-
-    const cookie = await signUp("validation@example.com");
-    const response = await authenticatedRequest(cookie, "/api/problems/two-sum", "PATCH", {
+    const cookie = await signUp("Validation", "validation-bundled@example.com");
+    const response = await requestWithCookie("/api/problems/two-sum", cookie, "PATCH", {
       ...edited,
       id: "different-id",
       origin: "custom",

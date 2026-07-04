@@ -136,7 +136,7 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
       await onSubmit(problem);
       onClose();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save the Problem.");
+      setError(cause instanceof Error ? cause.message : "Could not save this Problem.");
     } finally {
       setSubmitting(false);
     }
@@ -146,7 +146,7 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
       <div className="flex max-h-full w-full max-w-lg flex-col gap-3 overflow-auto rounded-xl border border-neutral-700 bg-neutral-900 p-6">
         <h2 className="text-lg font-semibold text-neutral-100">
-          {editing ? "Edit problem" : "Import a solution"}
+          {editing ? "Edit problem" : "Create custom problem"}
         </h2>
 
         <Field label="Title">
@@ -341,9 +341,9 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
             type="button"
             onClick={() => void submit()}
             disabled={submitting}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
           >
-            {submitting ? "Saving…" : editing ? "Save" : "Add"}
+            {submitting ? "Saving…" : editing ? "Save" : "Create"}
           </button>
         </div>
       </div>
