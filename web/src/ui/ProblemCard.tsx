@@ -7,10 +7,10 @@ import { DIFFICULTY_COLOR } from "./difficulty";
 interface ProblemCardProps {
   problem: Problem;
   search: LibrarySearch;
-  onDelete: (id: string) => void;
+  onArchive: (problem: Problem) => void;
 }
 
-export function ProblemCard({ problem, search, onDelete }: ProblemCardProps) {
+export function ProblemCard({ problem, search, onArchive }: ProblemCardProps) {
   const bestCpms = problem.solutions
     .map((s) => bestFor(problem.id, s.id)?.bestCpm)
     .filter((v): v is number => v !== undefined);
@@ -46,11 +46,11 @@ export function ProblemCard({ problem, search, onDelete }: ProblemCardProps) {
         {problem.origin === "custom" && (
           <button
             type="button"
-            onClick={() => onDelete(problem.id)}
-            className="text-neutral-600 hover:text-red-400"
-            aria-label={`Delete ${problem.title}`}
+            onClick={() => onArchive(problem)}
+            className="rounded border border-neutral-700 px-2 py-1 text-xs text-neutral-400 hover:border-amber-500 hover:text-amber-300"
+            aria-label={`Archive ${problem.title}`}
           >
-            ✕
+            Archive
           </button>
         )}
       </div>

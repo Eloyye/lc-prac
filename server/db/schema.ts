@@ -91,25 +91,29 @@ export const verification = sqliteTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
-export const problems = sqliteTable("problems", {
-  // Stable logical id used in routes (`/problems/:id`) and Attempts. Matches the
-  // bundled content's authored id (e.g. `two-sum`) so deep links never change.
-  id: text("id").primaryKey(),
-  slug: text("slug").unique(),
-  title: text("title").notNull(),
-  difficulty: text("difficulty", { enum: ["easy", "medium", "hard"] }).notNull(),
-  origin: text("origin", { enum: ["bundled", "custom"] }).notNull(),
-  // Null for bundled rows; the owning user id for custom rows (future phase).
-  ownerUserId: text("owner_user_id"),
-  url: text("url"),
-  statement: text("statement"),
-  expectedTime: text("expected_time"),
-  expectedSpace: text("expected_space"),
-  // Set when a custom Problem is archived out of the active Library (future).
-  archivedAtMs: integer("archived_at_ms"),
-  createdAtMs: integer("created_at_ms").notNull(),
-  updatedAtMs: integer("updated_at_ms").notNull(),
-});
+export const problems = sqliteTable(
+  "problems",
+  {
+    // Stable logical id used in routes (`/problems/:id`) and Attempts. Matches the
+    // bundled content's authored id (e.g. `two-sum`) so deep links never change.
+    id: text("id").primaryKey(),
+    slug: text("slug").unique(),
+    title: text("title").notNull(),
+    difficulty: text("difficulty", { enum: ["easy", "medium", "hard"] }).notNull(),
+    origin: text("origin", { enum: ["bundled", "custom"] }).notNull(),
+    // Null for bundled rows; custom rows carry the owning account id.
+    ownerUserId: text("owner_user_id"),
+    url: text("url"),
+    statement: text("statement"),
+    expectedTime: text("expected_time"),
+    expectedSpace: text("expected_space"),
+    // Set when a custom Problem is archived out of the active Library.
+    archivedAtMs: integer("archived_at_ms"),
+    createdAtMs: integer("created_at_ms").notNull(),
+    updatedAtMs: integer("updated_at_ms").notNull(),
+  },
+  (table) => [index("problems_owner_user_id_idx").on(table.ownerUserId)],
+);
 
 export const solutions = sqliteTable("solutions", {
   id: text("id").primaryKey(),

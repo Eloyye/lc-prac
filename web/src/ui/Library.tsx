@@ -7,16 +7,23 @@ import { usePreferences } from "../store/preferences";
 import { ProblemCard } from "./ProblemCard";
 import { ProblemDialog } from "./ProblemDialog";
 import { AccountControl } from "./AccountControl";
+import { authClient } from "../api/auth";
+import type { Problem } from "@shared/types";
 
 const DIFFICULTIES: DifficultyFilter[] = ["all", "easy", "medium", "hard"];
 
 export function Library() {
+  const { data: session, isPending: sessionPending } = authClient.useSession();
   const problems = useLibrary((s) => s.problems);
+  const archived = useLibrary((s) => s.archived);
   const status = useLibrary((s) => s.status);
   const error = useLibrary((s) => s.error);
+  const actionError = useLibrary((s) => s.actionError);
   const load = useLibrary((s) => s.load);
   const saveProblem = useLibrary((s) => s.saveProblem);
   const deleteProblem = useLibrary((s) => s.deleteProblem);
+  const restoreProblem = useLibrary((s) => s.restoreProblem);
+  const permanentlyDeleteProblem = useLibrary((s) => s.permanentlyDeleteProblem);
   const openPalette = usePreferences((s) => s.openPalette);
   const openSettings = usePreferences((s) => s.openSettings);
 
@@ -29,6 +36,7 @@ export function Library() {
   const tag = search.tag ?? null;
 
   const [importing, setImporting] = useState(false);
+  const [view, setView] = useState<"active" | "archived">("active");
 
   const setQuery = (value: string): void => {
     navigate({
@@ -52,11 +60,24 @@ export function Library() {
     });
   };
 
-  const tags = useMemo(() => allTags(problems), [problems]);
+  const displayedProblems = view === "active" ? problems : archived;
+  const tags = useMemo(() => allTags(displayedProblems), [displayedProblems]);
   const filtered = useMemo(
-    () => filterProblems(problems, { query, difficulty, tag }),
-    [problems, query, difficulty, tag],
+    () => filterProblems(displayedProblems, { query, difficulty, tag }),
+    [displayedProblems, query, difficulty, tag],
   );
+
+  const archive = (problem: Problem): void => {
+    if (window.confirm(`Archive "${problem.title}"? You can restore it later.`)) {
+      void deleteProblem(problem.id).catch(() => {});
+    }
+  };
+
+  const permanentlyDelete = (problem: Problem): void => {
+    if (window.confirm(`Permanently delete "${problem.title}"? This cannot be undone.`)) {
+      void permanentlyDeleteProblem(problem.id).catch(() => {});
+    }
+  };
 
   return (
     <div className="relative min-h-screen bg-neutral-950 text-neutral-100">
@@ -86,9 +107,11 @@ export function Library() {
             <button
               type="button"
               onClick={() => setImporting(true)}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+              disabled={sessionPending || session === null}
+              title={session === null ? "Sign in to create synced custom Problems" : undefined}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Import solution
+              Create problem
             </button>
             <span className="mx-1 h-6 w-px bg-neutral-700" aria-hidden="true" />
             <AccountControl />
@@ -96,6 +119,20 @@ export function Library() {
         </header>
 
         <div className="mb-6 flex flex-wrap items-center gap-3">
+          <div className="flex rounded-lg border border-neutral-700 p-0.5 text-sm">
+            {(["active", "archived"] as const).map((candidate) => (
+              <button
+                key={candidate}
+                type="button"
+                onClick={() => setView(candidate)}
+                className={`rounded-md px-3 py-1.5 capitalize ${
+                  view === candidate ? "bg-neutral-700 text-white" : "text-neutral-400"
+                }`}
+              >
+                {candidate}
+              </button>
+            ))}
+          </div>
           <input
             className="w-56 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-neutral-500"
             placeholder="Search problems…"
@@ -132,6 +169,8 @@ export function Library() {
           </select>
         </div>
 
+        {actionError !== null && <p className="mb-4 text-sm text-rose-400">{actionError}</p>}
+
         {status === "error" ? (
           <div className="flex flex-col items-start gap-3">
             <p className="text-rose-400">{error ?? "Could not load the library."}</p>
@@ -149,14 +188,52 @@ export function Library() {
           <p className="text-neutral-500">No problems match your filters.</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((problem) => (
-              <ProblemCard
-                key={problem.id}
-                problem={problem}
-                search={search}
-                onDelete={deleteProblem}
-              />
-            ))}
+            {filtered.map((problem) =>
+              view === "active" ? (
+                <ProblemCard
+                  key={problem.id}
+                  problem={problem}
+                  search={search}
+                  onArchive={archive}
+                />
+              ) : (
+                <div
+                  key={problem.id}
+                  className="flex flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-4"
+                >
+                  <div>
+                    <h3 className="font-medium text-neutral-100">{problem.title}</h3>
+                    <span className="text-xs uppercase text-neutral-500">{problem.difficulty}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {problem.tags.map((problemTag) => (
+                      <span
+                        key={problemTag}
+                        className="rounded bg-neutral-800 px-1.5 py-0.5 text-xs text-neutral-400"
+                      >
+                        {problemTag}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-auto flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void restoreProblem(problem.id).catch(() => {})}
+                      className="rounded-lg border border-emerald-700 px-3 py-1.5 text-sm text-emerald-300 hover:border-emerald-500"
+                    >
+                      Restore
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => permanentlyDelete(problem)}
+                      className="rounded-lg border border-red-900 px-3 py-1.5 text-sm text-red-400 hover:border-red-600"
+                    >
+                      Delete permanently
+                    </button>
+                  </div>
+                </div>
+              ),
+            )}
           </div>
         )}
       </div>

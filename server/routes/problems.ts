@@ -1,32 +1,38 @@
 import { Hono } from "hono";
-import type { RequestLoggerVariables } from "../middleware/request-logger";
+import type { Context } from "hono";
+import type { Problem } from "../../shared/types";
 import type { Db } from "../db/client";
-import { getProblem, listProblems, MAX_LIMIT } from "../services/problems";
-import type { ListProblemsQuery } from "../services/problems";
+import type { RequestLoggerVariables } from "../middleware/request-logger";
+import { requireUser } from "../middleware/session";
+import type { AuthVariables } from "../middleware/session";
+import {
+  archiveCustomProblem,
+  createCustomProblem,
+  getProblem,
+  listProblems,
+  MAX_LIMIT,
+  permanentlyDeleteCustomProblem,
+  restoreCustomProblem,
+  updateCustomProblem,
+} from "../services/problems";
+import type { CustomProblemMutationResult, ListProblemsQuery } from "../services/problems";
 
 const DIFFICULTIES = new Set(["easy", "medium", "hard"]);
 const ORIGINS = new Set(["bundled", "custom"]);
 const STATUSES = new Set(["active", "archived"]);
 
-type ParsedQuery =
-  | { ok: true; value: ListProblemsQuery }
-  | { ok: false; fieldErrors: Record<string, string[]> };
+type RouterVariables = RequestLoggerVariables & AuthVariables;
+type FieldErrors = Record<string, string[]>;
+type ParsedQuery = { ok: true; value: ListProblemsQuery } | { ok: false; fieldErrors: FieldErrors };
+type ParsedProblem = { ok: true; value: Problem } | { ok: false; fieldErrors: FieldErrors };
 
-/** A present, non-empty query value; treats `?q=` (empty) as absent. */
 function present(value: string | undefined): string | undefined {
   return value !== undefined && value !== "" ? value : undefined;
 }
 
-/**
- * Validate the list query string into a typed `ListProblemsQuery`. Unknown enum
- * values and out-of-range limits are rejected (400) rather than silently
- * ignored, so a malformed Library link fails loudly instead of returning a
- * misleading list.
- */
 function parseListQuery(raw: Record<string, string>): ParsedQuery {
-  const fieldErrors: Record<string, string[]> = {};
+  const fieldErrors: FieldErrors = {};
   const value: ListProblemsQuery = {};
-
   const q = present(raw.q);
   if (q !== undefined) value.q = q;
   const tag = present(raw.tag);
@@ -36,58 +42,192 @@ function parseListQuery(raw: Record<string, string>): ParsedQuery {
 
   const difficulty = present(raw.difficulty);
   if (difficulty !== undefined) {
-    if (DIFFICULTIES.has(difficulty)) {
+    if (DIFFICULTIES.has(difficulty))
       value.difficulty = difficulty as ListProblemsQuery["difficulty"];
-    } else {
-      fieldErrors.difficulty = ["Must be one of easy, medium, hard."];
-    }
+    else fieldErrors.difficulty = ["Must be one of easy, medium, hard."];
   }
-
   const origin = present(raw.origin);
   if (origin !== undefined) {
-    if (ORIGINS.has(origin)) {
-      value.origin = origin as ListProblemsQuery["origin"];
-    } else {
-      fieldErrors.origin = ["Must be one of bundled, custom."];
-    }
+    if (ORIGINS.has(origin)) value.origin = origin as ListProblemsQuery["origin"];
+    else fieldErrors.origin = ["Must be one of bundled, custom."];
   }
-
   const status = present(raw.status);
   if (status !== undefined) {
-    if (STATUSES.has(status)) {
-      value.status = status as ListProblemsQuery["status"];
-    } else {
-      fieldErrors.status = ["Must be one of active, archived."];
-    }
+    if (STATUSES.has(status)) value.status = status as ListProblemsQuery["status"];
+    else fieldErrors.status = ["Must be one of active, archived."];
   }
-
   const limit = present(raw.limit);
   if (limit !== undefined) {
     const parsed = Number(limit);
     if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_LIMIT) {
       fieldErrors.limit = [`Must be an integer between 1 and ${MAX_LIMIT}.`];
-    } else {
-      value.limit = parsed;
+    } else value.limit = parsed;
+  }
+  return Object.keys(fieldErrors).length > 0 ? { ok: false, fieldErrors } : { ok: true, value };
+}
+
+function object(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+function optionalString(value: unknown, field: string, errors: FieldErrors): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string") {
+    errors[field] = ["Must be a string."];
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+/** Validate and normalize the full custom Problem document accepted by writes. */
+function parseCustomProblem(body: unknown): ParsedProblem {
+  if (!object(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };
+  const errors: FieldErrors = {};
+  if (!nonEmptyString(body.id)) errors.id = ["A non-empty id is required."];
+  if (!nonEmptyString(body.title)) errors.title = ["A non-empty title is required."];
+  if (typeof body.difficulty !== "string" || !DIFFICULTIES.has(body.difficulty)) {
+    errors.difficulty = ["Must be one of easy, medium, hard."];
+  }
+  if (body.origin !== "custom") errors.origin = ["Must be custom."];
+
+  const url = optionalString(body.url, "url", errors);
+  const statement = optionalString(body.statement, "statement", errors);
+  const expectedTime = optionalString(body.expectedTime, "expectedTime", errors);
+  const expectedSpace = optionalString(body.expectedSpace, "expectedSpace", errors);
+
+  const tagValues: string[] = [];
+  if (!Array.isArray(body.tags)) errors.tags = ["Must be an array of strings."];
+  else {
+    for (const tag of body.tags) {
+      if (!nonEmptyString(tag)) {
+        errors.tags = ["Every tag must be a non-empty string."];
+        break;
+      }
+      const normalized = tag.trim().toLowerCase();
+      if (!tagValues.includes(normalized)) tagValues.push(normalized);
     }
   }
 
-  if (Object.keys(fieldErrors).length > 0) {
-    return { ok: false, fieldErrors };
+  const solutionValues: Problem["solutions"] = [];
+  if (!Array.isArray(body.solutions) || body.solutions.length === 0) {
+    errors.solutions = ["At least one Solution is required."];
+  } else {
+    const ids = new Set<string>();
+    body.solutions.forEach((candidate, index) => {
+      const key = `solutions.${index}`;
+      if (!object(candidate)) {
+        errors[key] = ["Must be an object."];
+        return;
+      }
+      if (!nonEmptyString(candidate.id)) errors[`${key}.id`] = ["A non-empty id is required."];
+      else if (ids.has(candidate.id)) errors[`${key}.id`] = ["Solution ids must be unique."];
+      else ids.add(candidate.id);
+      if (candidate.lang !== "python") errors[`${key}.lang`] = ["Must be python."];
+      if (!nonEmptyString(candidate.approach)) {
+        errors[`${key}.approach`] = ["A non-empty approach is required."];
+      }
+      if (!nonEmptyString(candidate.code)) errors[`${key}.code`] = ["Non-empty code is required."];
+      const timeComplexity = optionalString(
+        candidate.timeComplexity,
+        `${key}.timeComplexity`,
+        errors,
+      );
+      const spaceComplexity = optionalString(
+        candidate.spaceComplexity,
+        `${key}.spaceComplexity`,
+        errors,
+      );
+      if (
+        nonEmptyString(candidate.id) &&
+        candidate.lang === "python" &&
+        nonEmptyString(candidate.approach) &&
+        nonEmptyString(candidate.code)
+      ) {
+        solutionValues.push({
+          id: candidate.id,
+          lang: "python",
+          approach: candidate.approach.trim(),
+          code: candidate.code.replace(/\r\n/g, "\n"),
+          ...(timeComplexity === undefined ? {} : { timeComplexity }),
+          ...(spaceComplexity === undefined ? {} : { spaceComplexity }),
+        });
+      }
+    });
   }
-  return { ok: true, value };
+
+  const exampleValues: NonNullable<Problem["examples"]> = [];
+  if (body.examples !== undefined) {
+    if (!Array.isArray(body.examples)) errors.examples = ["Must be an array."];
+    else {
+      body.examples.forEach((candidate, index) => {
+        const key = `examples.${index}`;
+        if (!object(candidate)) {
+          errors[key] = ["Must be an object."];
+          return;
+        }
+        if (!nonEmptyString(candidate.input)) errors[`${key}.input`] = ["Input is required."];
+        if (!nonEmptyString(candidate.output)) errors[`${key}.output`] = ["Output is required."];
+        const explanation = optionalString(candidate.explanation, `${key}.explanation`, errors);
+        if (nonEmptyString(candidate.input) && nonEmptyString(candidate.output)) {
+          exampleValues.push({
+            input: candidate.input.trim(),
+            output: candidate.output.trim(),
+            ...(explanation === undefined ? {} : { explanation }),
+          });
+        }
+      });
+    }
+  }
+
+  if (Object.keys(errors).length > 0) return { ok: false, fieldErrors: errors };
+  return {
+    ok: true,
+    value: {
+      id: (body.id as string).trim(),
+      title: (body.title as string).trim(),
+      difficulty: body.difficulty as Problem["difficulty"],
+      tags: tagValues,
+      origin: "custom",
+      ...(url === undefined ? {} : { url }),
+      ...(statement === undefined ? {} : { statement }),
+      ...(expectedTime === undefined ? {} : { expectedTime }),
+      ...(expectedSpace === undefined ? {} : { expectedSpace }),
+      ...(exampleValues.length === 0 ? {} : { examples: exampleValues }),
+      solutions: solutionValues,
+    },
+  };
 }
 
-/**
- * The anonymous Problem Library API, mounted at `/api/problems`:
- *
- * - `GET /`     the effective Library list with filters and cursor pagination.
- * - `GET /:id`  one effective Problem, or a JSON 404 for an unknown id.
- *
- * Both return pristine bundled Problems read from SQLite. Personalization
- * (Overrides, Tombstones, custom Problems) arrives with authentication later.
- */
+function mutationError(
+  c: Context<{ Variables: RouterVariables }>,
+  result: Exclude<CustomProblemMutationResult, { kind: "ok" }>,
+) {
+  const requestId = c.get("requestId");
+  if (result.kind === "conflict") {
+    return c.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message: "A Problem or Solution id is already in use.",
+          requestId,
+        },
+      },
+      409,
+    );
+  }
+  return c.json(
+    { error: { code: "NOT_FOUND", message: "Custom Problem not found.", requestId } },
+    404,
+  );
+}
+
 export function createProblemsRouter(db: Db) {
-  const router = new Hono<{ Variables: RequestLoggerVariables }>();
+  const router = new Hono<{ Variables: RouterVariables }>();
 
   router.get("/", (c) => {
     const parsed = parseListQuery(c.req.query());
@@ -104,11 +244,79 @@ export function createProblemsRouter(db: Db) {
         400,
       );
     }
-    return c.json(listProblems(db, parsed.value));
+    return c.json(listProblems(db, parsed.value, c.var.user?.id));
+  });
+
+  router.post("/", requireUser, async (c) => {
+    const parsed = parseCustomProblem(await c.req.json().catch(() => null));
+    if (!parsed.ok) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION",
+            message: "Invalid custom Problem.",
+            requestId: c.var.requestId,
+            fieldErrors: parsed.fieldErrors,
+          },
+        },
+        400,
+      );
+    }
+    const result = createCustomProblem(db, c.var.user!.id, parsed.value);
+    return result.kind === "ok" ? c.json(result.problem, 201) : mutationError(c, result);
+  });
+
+  router.patch("/:id", requireUser, async (c) => {
+    const parsed = parseCustomProblem(await c.req.json().catch(() => null));
+    if (!parsed.ok) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION",
+            message: "Invalid custom Problem.",
+            requestId: c.var.requestId,
+            fieldErrors: parsed.fieldErrors,
+          },
+        },
+        400,
+      );
+    }
+    if (parsed.value.id !== c.req.param("id")) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION",
+            message: "Problem id cannot change.",
+            requestId: c.var.requestId,
+            fieldErrors: { id: ["Must match the route id."] },
+          },
+        },
+        400,
+      );
+    }
+    const result = updateCustomProblem(db, c.var.user!.id, parsed.value.id, parsed.value);
+    return result.kind === "ok" ? c.json(result.problem) : mutationError(c, result);
+  });
+
+  router.delete("/:id", requireUser, (c) => {
+    const result = archiveCustomProblem(db, c.var.user!.id, c.req.param("id"));
+    return result.kind === "ok" ? c.json(result.problem) : mutationError(c, result);
+  });
+
+  router.post("/:id/restore", requireUser, (c) => {
+    const result = restoreCustomProblem(db, c.var.user!.id, c.req.param("id"));
+    return result.kind === "ok" ? c.json(result.problem) : mutationError(c, result);
+  });
+
+  router.delete("/:id/permanent", requireUser, (c) => {
+    if (!permanentlyDeleteCustomProblem(db, c.var.user!.id, c.req.param("id"))) {
+      return mutationError(c, { kind: "not-found" });
+    }
+    return c.body(null, 204);
   });
 
   router.get("/:id", (c) => {
-    const problem = getProblem(db, c.req.param("id"));
+    const problem = getProblem(db, c.req.param("id"), c.var.user?.id);
     if (problem === null) {
       return c.json(
         {

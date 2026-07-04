@@ -22,6 +22,7 @@ import { ProblemDetail } from "./ui/ProblemDetail";
 import { SessionView } from "./ui/SessionView";
 import { SettingsDialog } from "./ui/SettingsDialog";
 import { Stats } from "./ui/Stats";
+import { authClient } from "./api/auth";
 
 /**
  * Search-param schema for the Library route. Defaults are encoded as "absent"
@@ -42,12 +43,16 @@ function validateLibrarySearch(search: Record<string, unknown>): LibrarySearch {
 
 /** Always-mounted shell; stamps the storage schema and hydrates the Library. */
 function RootLayout() {
+  const { data: session, isPending } = authClient.useSession();
   useEffect(() => {
     initStorage();
-    // Kick off Library hydration for routes without a blocking loader (the list).
-    // Idempotent with the deep-link loaders, which await the same load.
-    void useLibrary.getState().ensureLoaded();
   }, []);
+  useEffect(() => {
+    if (isPending) return;
+    // Session identity changes switch the authoritative custom Problem set.
+    useLibrary.setState({ status: "idle" });
+    void useLibrary.getState().ensureLoaded();
+  }, [isPending, session?.user.id]);
   return (
     <>
       <Outlet />

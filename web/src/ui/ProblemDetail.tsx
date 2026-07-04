@@ -36,6 +36,7 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
   const saveProblem = useLibrary((s) => s.saveProblem);
   const deleteProblem = useLibrary((s) => s.deleteProblem);
   const resetProblem = useLibrary((s) => s.resetProblem);
+  const actionError = useLibrary((s) => s.actionError);
   const [editing, setEditing] = useState(false);
 
   const attempts = recentAttemptsForProblem(problem.id);
@@ -48,13 +49,14 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
   const canReset = problem.origin === "bundled" && hasOverride(problem.id);
 
   const handleDelete = (): void => {
-    if (
-      window.confirm(
-        `Delete "${problem.title}"? This also removes its attempts and personal bests.`,
-      )
-    ) {
-      deleteProblem(problem.id);
-      navigate({ to: "/problems", search });
+    const message =
+      problem.origin === "custom"
+        ? `Archive "${problem.title}"? You can restore it later.`
+        : `Delete "${problem.title}"? This also removes its attempts and personal bests.`;
+    if (window.confirm(message)) {
+      void deleteProblem(problem.id)
+        .then(() => navigate({ to: "/problems", search }))
+        .catch(() => {});
     }
   };
 
@@ -99,7 +101,7 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
               onClick={handleDelete}
               className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 hover:border-red-500 hover:text-red-400"
             >
-              Delete
+              {problem.origin === "custom" ? "Archive" : "Delete"}
             </button>
             <span className="mx-1 h-6 w-px bg-neutral-700" aria-hidden="true" />
             <AccountControl />
@@ -132,6 +134,8 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
             </a>
           )}
         </header>
+
+        {actionError !== null && <p className="mb-6 text-sm text-rose-400">{actionError}</p>}
 
         {problem.statement !== undefined && (
           <section className="mb-8">
