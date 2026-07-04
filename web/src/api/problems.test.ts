@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Problem } from "@shared/types";
 import { ApiError } from "./client";
-import { getProblem, listProblems } from "./problems";
+import {
+  archiveProblem,
+  createProblem,
+  getProblem,
+  listProblems,
+  permanentlyDeleteProblem,
+  restoreProblem,
+  updateProblem,
+} from "./problems";
 
 const twoSum: Problem = {
   id: "two-sum",
@@ -13,7 +21,9 @@ const twoSum: Problem = {
 };
 
 function stubFetch(impl: (url: string) => Response | Promise<Response>) {
-  const fn = vi.fn((input: RequestInfo | URL) => Promise.resolve(impl(String(input))));
+  const fn = vi.fn((input: RequestInfo | URL, _init?: RequestInit) =>
+    Promise.resolve(impl(String(input))),
+  );
   vi.stubGlobal("fetch", fn);
   return fn;
 }
@@ -93,5 +103,40 @@ describe("getProblem", () => {
     );
 
     await expect(getProblem("two-sum")).rejects.toMatchObject({ status: 0, code: "NETWORK" });
+  });
+});
+
+describe("custom Problem mutations", () => {
+  const custom: Problem = { ...twoSum, id: "custom/id", origin: "custom" };
+
+  it("creates and updates complete custom Problems as JSON", async () => {
+    const fetchSpy = stubFetch(() => jsonResponse(custom));
+
+    await createProblem(custom);
+    await updateProblem(custom);
+
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("/api/problems");
+    expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify(custom),
+    });
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe("/api/problems/custom%2Fid");
+    expect(fetchSpy.mock.calls[1]?.[1]).toMatchObject({ method: "PATCH" });
+  });
+
+  it("uses distinct archive, restore, and permanent-delete endpoints", async () => {
+    const fetchSpy = stubFetch((url) =>
+      url.endsWith("/permanent") ? new Response(null, { status: 204 }) : jsonResponse(custom),
+    );
+
+    await archiveProblem(custom.id);
+    await restoreProblem(custom.id);
+    await permanentlyDeleteProblem(custom.id);
+
+    expect(fetchSpy.mock.calls.map((call) => [call[0], call[1]?.method])).toEqual([
+      ["/api/problems/custom%2Fid", "DELETE"],
+      ["/api/problems/custom%2Fid/restore", "POST"],
+      ["/api/problems/custom%2Fid/permanent", "DELETE"],
+    ]);
   });
 });

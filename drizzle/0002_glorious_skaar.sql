@@ -1,0 +1,1 @@
+CREATE INDEX `problems_owner_user_id_idx` ON `problems` (`owner_user_id`);

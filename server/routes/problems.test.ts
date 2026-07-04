@@ -3,12 +3,16 @@ import { pino } from "pino";
 import { PROBLEMS } from "../../shared/content/problems";
 import type { Problem } from "../../shared/types";
 import { createApp } from "../app";
+import { createAuth } from "../auth";
 import { openDatabase } from "../db/client";
 import type { DbConnection } from "../db/client";
 import { runMigrations } from "../db/migrate";
 import { seedBundledProblems } from "../db/seed";
 
 const logger = pino({ level: "silent" });
+const ORIGIN = "http://localhost:3000";
+const SECRET = "test-secret-that-is-at-least-32-characters";
+const PASSWORD = "correct-horse-battery-staple";
 
 type ProblemListBody = { problems: Problem[]; nextCursor: string | null };
 type ApiErrorBody = {
@@ -27,7 +31,13 @@ beforeEach(() => {
   conn = openDatabase(":memory:");
   runMigrations(conn.db);
   seedBundledProblems(conn.db, PROBLEMS);
-  app = createApp({ logger, db: conn.db });
+  const auth = createAuth({
+    db: conn.db,
+    baseURL: ORIGIN,
+    secret: SECRET,
+    secureCookies: false,
+  });
+  app = createApp({ logger, auth, db: conn.db });
 });
 
 afterEach(() => {
@@ -35,6 +45,60 @@ afterEach(() => {
 });
 
 const ids = (body: ProblemListBody): string[] => body.problems.map((p) => p.id);
+
+function cookieFrom(response: Response): string {
+  const setCookie = response.headers.get("set-cookie");
+  if (setCookie === null) throw new Error("Expected a session cookie");
+  return setCookie.split(";", 1)[0];
+}
+
+async function signUp(name: string, email: string): Promise<string> {
+  const response = await app.request("/api/auth/sign-up/email", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: ORIGIN },
+    body: JSON.stringify({ name, email, password: PASSWORD }),
+  });
+  expect(response.status).toBe(200);
+  return cookieFrom(response);
+}
+
+async function requestWithCookie(
+  path: string,
+  cookie: string,
+  method = "GET",
+  body?: unknown,
+): Promise<Response> {
+  return await app.request(path, {
+    method,
+    headers: {
+      cookie,
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+const customProblem: Problem = {
+  id: "custom-ada",
+  title: "Count Letters",
+  difficulty: "medium",
+  tags: ["String", "hash-map"],
+  origin: "custom",
+  statement: "Count every **letter**.",
+  expectedTime: "O(n)",
+  expectedSpace: "O(k)",
+  examples: [{ input: '"aba"', output: '{"a": 2, "b": 1}', explanation: "Count each." }],
+  solutions: [
+    {
+      id: "custom-ada-solution",
+      lang: "python",
+      approach: "Frequency map",
+      code: "def count_letters(value):\n    return Counter(value)",
+      timeComplexity: "O(n)",
+      spaceComplexity: "O(k)",
+    },
+  ],
+};
 
 describe("GET /api/problems", () => {
   it("returns the pristine bundled Library in authored order with a request id", async () => {
@@ -126,5 +190,122 @@ describe("GET /api/problems/:id", () => {
     const body = (await res.json()) as ApiErrorBody;
     expect(body.error.code).toBe("NOT_FOUND");
     expect(body.error.requestId).toBe(res.headers.get("x-request-id"));
+  });
+});
+
+describe("authenticated custom Problem lifecycle", () => {
+  it("requires authentication for every mutation", async () => {
+    expect((await app.request("/api/problems", { method: "POST", body: "{}" })).status).toBe(401);
+    expect(
+      (await app.request("/api/problems/missing", { method: "PATCH", body: "{}" })).status,
+    ).toBe(401);
+    expect((await app.request("/api/problems/missing", { method: "DELETE" })).status).toBe(401);
+    expect((await app.request("/api/problems/missing/restore", { method: "POST" })).status).toBe(
+      401,
+    );
+    expect(
+      (await app.request("/api/problems/missing/permanent", { method: "DELETE" })).status,
+    ).toBe(401);
+  });
+
+  it("creates and edits every custom Problem content surface", async () => {
+    const cookie = await signUp("Ada", "ada-problems@example.com");
+    const created = await requestWithCookie("/api/problems", cookie, "POST", customProblem);
+
+    expect(created.status).toBe(201);
+    const normalized = { ...customProblem, tags: ["string", "hash-map"] };
+    expect(await created.json()).toEqual(normalized);
+
+    const edited: Problem = {
+      ...normalized,
+      title: "Count Unicode Letters",
+      statement: "Count every Unicode code point.",
+      examples: [{ input: '"åå"', output: '{"å": 2}' }],
+      solutions: [
+        ...normalized.solutions,
+        {
+          id: "custom-ada-solution-2",
+          lang: "python",
+          approach: "Manual map",
+          code: "def count_letters(value):\n    counts = {}\n    return counts",
+        },
+      ],
+    };
+    const updated = await requestWithCookie(
+      `/api/problems/${customProblem.id}`,
+      cookie,
+      "PATCH",
+      edited,
+    );
+
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toEqual(edited);
+    expect(
+      await (await requestWithCookie(`/api/problems/${customProblem.id}`, cookie)).json(),
+    ).toEqual(edited);
+  });
+
+  it("isolates active and archived custom Problems between two users", async () => {
+    const ada = await signUp("Ada", "ada-isolation@example.com");
+    const grace = await signUp("Grace", "grace-isolation@example.com");
+    expect((await requestWithCookie("/api/problems", ada, "POST", customProblem)).status).toBe(201);
+
+    const adaActive = (await (
+      await requestWithCookie("/api/problems", ada)
+    ).json()) as ProblemListBody;
+    const graceActive = (await (
+      await requestWithCookie("/api/problems", grace)
+    ).json()) as ProblemListBody;
+    const anonymousActive = (await (await app.request("/api/problems")).json()) as ProblemListBody;
+    expect(ids(adaActive)).toContain(customProblem.id);
+    expect(ids(graceActive)).not.toContain(customProblem.id);
+    expect(ids(anonymousActive)).not.toContain(customProblem.id);
+    expect((await requestWithCookie(`/api/problems/${customProblem.id}`, grace)).status).toBe(404);
+    expect(
+      (await requestWithCookie(`/api/problems/${customProblem.id}`, grace, "DELETE")).status,
+    ).toBe(404);
+
+    expect(
+      (await requestWithCookie(`/api/problems/${customProblem.id}`, ada, "DELETE")).status,
+    ).toBe(200);
+    const adaArchived = (await (
+      await requestWithCookie("/api/problems?status=archived", ada)
+    ).json()) as ProblemListBody;
+    const graceArchived = (await (
+      await requestWithCookie("/api/problems?status=archived", grace)
+    ).json()) as ProblemListBody;
+    expect(adaArchived.problems).toEqual([{ ...customProblem, tags: ["string", "hash-map"] }]);
+    expect(graceArchived.problems).toEqual([]);
+    expect((await requestWithCookie(`/api/problems/${customProblem.id}`, ada)).status).toBe(404);
+  });
+
+  it("restores identity and permits permanent deletion only while archived", async () => {
+    const cookie = await signUp("Ada", "ada-lifecycle@example.com");
+    await requestWithCookie("/api/problems", cookie, "POST", customProblem);
+
+    expect(
+      (await requestWithCookie(`/api/problems/${customProblem.id}/permanent`, cookie, "DELETE"))
+        .status,
+    ).toBe(404);
+    await requestWithCookie(`/api/problems/${customProblem.id}`, cookie, "DELETE");
+    const restored = await requestWithCookie(
+      `/api/problems/${customProblem.id}/restore`,
+      cookie,
+      "POST",
+    );
+    expect(restored.status).toBe(200);
+    expect(await restored.json()).toEqual({ ...customProblem, tags: ["string", "hash-map"] });
+
+    await requestWithCookie(`/api/problems/${customProblem.id}`, cookie, "DELETE");
+    const removed = await requestWithCookie(
+      `/api/problems/${customProblem.id}/permanent`,
+      cookie,
+      "DELETE",
+    );
+    expect(removed.status).toBe(204);
+    const archived = (await (
+      await requestWithCookie("/api/problems?status=archived", cookie)
+    ).json()) as ProblemListBody;
+    expect(archived.problems).toEqual([]);
   });
 });

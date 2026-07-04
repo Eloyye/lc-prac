@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 export type HeaderMenuItem = {
   label: string;
   onClick: () => void;
+  disabled?: boolean;
+  title?: string;
   /** Optional keyboard hint shown trailing the label (e.g. "⌘K"). */
   kbd?: string;
   /** Tints the item: a primary call-to-action or a destructive action. */
@@ -80,11 +82,13 @@ export function HeaderMenu({ items, className }: { items: HeaderMenuItem[]; clas
               key={item.label}
               type="button"
               role="menuitem"
+              disabled={item.disabled}
+              title={item.title}
               onClick={() => {
                 setOpen(false);
                 item.onClick();
               }}
-              className={`flex w-full items-center justify-between gap-4 rounded-lg px-2.5 py-2 text-left ${
+              className={`flex w-full items-center justify-between gap-4 rounded-lg px-2.5 py-2 text-left disabled:cursor-not-allowed disabled:opacity-50 ${
                 ITEM_VARIANT[item.variant ?? "default"]
               }`}
             >

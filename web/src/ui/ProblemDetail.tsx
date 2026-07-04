@@ -46,6 +46,7 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
   const saveProblem = useLibrary((s) => s.saveProblem);
   const deleteProblem = useLibrary((s) => s.deleteProblem);
   const resetProblem = useLibrary((s) => s.resetProblem);
+  const actionError = useLibrary((s) => s.actionError);
   const [editing, setEditing] = useState(false);
 
   const attempts = recentAttemptsForProblem(problem.id);
@@ -58,13 +59,14 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
   const canReset = problem.origin === "bundled" && hasOverride(problem.id);
 
   const handleDelete = (): void => {
-    if (
-      window.confirm(
-        `Delete "${problem.title}"? This also removes its attempts and personal bests.`,
-      )
-    ) {
-      deleteProblem(problem.id);
-      navigate({ to: "/problems", search });
+    const message =
+      problem.origin === "custom"
+        ? `Archive "${problem.title}"? You can restore it later.`
+        : `Delete "${problem.title}"? This also removes its attempts and personal bests.`;
+    if (window.confirm(message)) {
+      void deleteProblem(problem.id)
+        .then(() => navigate({ to: "/problems", search }))
+        .catch(() => {});
     }
   };
 
@@ -82,7 +84,11 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
   const actions: HeaderMenuItem[] = [
     { label: "Edit", onClick: () => setEditing(true) },
     ...(canReset ? [{ label: "Reset to original", onClick: handleReset }] : []),
-    { label: "Delete", variant: "danger", onClick: handleDelete },
+    {
+      label: problem.origin === "custom" ? "Archive" : "Delete",
+      variant: "danger",
+      onClick: handleDelete,
+    },
   ];
 
   return (
@@ -141,6 +147,8 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
             </a>
           )}
         </header>
+
+        {actionError !== null && <p className="mb-6 text-sm text-rose-400">{actionError}</p>}
 
         {problem.statement !== undefined && (
           <section className="mb-8">
