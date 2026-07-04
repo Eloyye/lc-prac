@@ -2,12 +2,28 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Problem } from "@shared/types";
 import type { ProblemListResponse } from "../api/problems";
 
-vi.mock("../api/problems", () => ({ listProblems: vi.fn() }));
+vi.mock("../api/problems", () => ({
+  listProblems: vi.fn(),
+  updateBundledProblem: vi.fn(),
+  hideBundledProblem: vi.fn(),
+  restoreBundledProblem: vi.fn(),
+  resetBundledProblem: vi.fn(),
+}));
 
-import { listProblems } from "../api/problems";
+import {
+  hideBundledProblem,
+  listProblems,
+  resetBundledProblem,
+  restoreBundledProblem,
+  updateBundledProblem,
+} from "../api/problems";
 import { resolveProblem, resolveSession, useLibrary } from "./library";
 
 const mockedList = vi.mocked(listProblems);
+const mockedUpdate = vi.mocked(updateBundledProblem);
+const mockedHide = vi.mocked(hideBundledProblem);
+const mockedRestore = vi.mocked(restoreBundledProblem);
+const mockedReset = vi.mocked(resetBundledProblem);
 
 // A bundled set the API "returns" — deliberately not the real PROBLEMS content,
 // so a passing test proves the store's active data comes from the API, not from
@@ -51,8 +67,20 @@ function createLocalStorage(): Storage {
 
 beforeEach(() => {
   mockedList.mockReset();
+  mockedUpdate.mockReset();
+  mockedHide.mockReset();
+  mockedRestore.mockReset();
+  mockedReset.mockReset();
   vi.stubGlobal("localStorage", createLocalStorage());
-  useLibrary.setState({ problems: [], bundled: [], status: "idle", error: null });
+  useLibrary.setState({
+    problems: [],
+    bundled: [],
+    hiddenProblems: [],
+    overriddenProblemIds: [],
+    authenticated: false,
+    status: "idle",
+    error: null,
+  });
 });
 
 describe("useLibrary.load", () => {
@@ -153,9 +181,62 @@ describe("local writes after API hydration", () => {
       origin: "custom",
       solutions: [{ id: "c1", lang: "python", approach: "Mine", code: "pass" }],
     };
-    useLibrary.getState().saveProblem(custom);
+    await useLibrary.getState().saveProblem(custom);
 
     const ids = useLibrary.getState().problems.map((p) => p.id);
     expect(ids).toEqual(["two-sum", "valid-parens", "custom-1"]);
+  });
+});
+
+describe("authenticated effective Library", () => {
+  const edited = { ...apiBundled[0]!, title: "Two Sum — server override" };
+
+  it("uses the server-effective merge and exposes Override/Tombstone metadata", async () => {
+    // A stale anonymous local Override must not shadow authenticated server state.
+    localStorage.setItem(
+      "ct:problems:overrides",
+      JSON.stringify({ "two-sum": { ...apiBundled[0], title: "stale local edit" } }),
+    );
+    mockedList.mockResolvedValue({
+      problems: [edited],
+      nextCursor: null,
+      personalization: {
+        overriddenProblemIds: ["two-sum", "valid-parens"],
+        hiddenProblems: [{ ...apiBundled[1]!, title: "Hidden personal snapshot" }],
+      },
+    });
+
+    await useLibrary.getState().load();
+
+    expect(useLibrary.getState()).toMatchObject({
+      authenticated: true,
+      problems: [edited],
+      overriddenProblemIds: ["two-sum", "valid-parens"],
+      hiddenProblems: [{ ...apiBundled[1]!, title: "Hidden personal snapshot" }],
+    });
+  });
+
+  it("persists edit, Hide, Restore, and Reset through the API then refreshes", async () => {
+    mockedList.mockResolvedValue({
+      problems: apiBundled,
+      nextCursor: null,
+      personalization: { overriddenProblemIds: ["two-sum"], hiddenProblems: [] },
+    });
+    mockedUpdate.mockResolvedValue({ problem: edited });
+    mockedHide.mockResolvedValue({ ok: true });
+    mockedRestore.mockResolvedValue({ ok: true });
+    mockedReset.mockResolvedValue({ ok: true });
+    await useLibrary.getState().load();
+
+    await useLibrary.getState().saveProblem(edited);
+    await useLibrary.getState().deleteProblem("two-sum");
+    await useLibrary.getState().restoreProblem("two-sum");
+    await useLibrary.getState().resetProblem("two-sum");
+
+    expect(mockedUpdate).toHaveBeenCalledWith("two-sum", edited);
+    expect(mockedHide).toHaveBeenCalledWith("two-sum");
+    expect(mockedRestore).toHaveBeenCalledWith("two-sum");
+    expect(mockedReset).toHaveBeenCalledWith("two-sum");
+    expect(mockedList).toHaveBeenCalledTimes(5);
   });
 });

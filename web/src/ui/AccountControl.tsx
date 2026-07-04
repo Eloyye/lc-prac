@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { authClient } from "../api/auth";
+import { useLibrary } from "../store/library";
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -77,6 +78,7 @@ export function AccountControl() {
     }
 
     await refetch();
+    await useLibrary.getState().load();
     close();
   };
 
@@ -144,7 +146,10 @@ export function AccountControl() {
                 role="menuitem"
                 onClick={() => {
                   setMenuOpen(false);
-                  void authClient.signOut();
+                  void authClient.signOut().then(async () => {
+                    await refetch();
+                    await useLibrary.getState().load();
+                  });
                 }}
                 className="block w-full rounded-lg px-2.5 py-2 text-left text-rose-300 hover:bg-neutral-800 hover:text-rose-200"
               >

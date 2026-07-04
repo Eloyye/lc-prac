@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import type { Mode, Problem, Solution } from "@shared/types";
-import { bestFor, hasOverride, recentAttemptsForProblem } from "../persistence/storage";
+import { bestFor, recentAttemptsForProblem } from "../persistence/storage";
 import { useLibrary } from "../store/library";
 import { DIFFICULTY_COLOR } from "./difficulty";
 import { Markdown } from "./Markdown";
@@ -36,7 +36,9 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
   const saveProblem = useLibrary((s) => s.saveProblem);
   const deleteProblem = useLibrary((s) => s.deleteProblem);
   const resetProblem = useLibrary((s) => s.resetProblem);
+  const overriddenProblemIds = useLibrary((s) => s.overriddenProblemIds);
   const [editing, setEditing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const attempts = recentAttemptsForProblem(problem.id);
   // Attempts only store a solutionId; resolve the approach from the Problem's
@@ -45,24 +47,37 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
     problem.solutions.find((s) => s.id === solutionId)?.approach ?? "Removed approach";
 
   // A bundled Problem can be reverted only once the user has actually edited it.
-  const canReset = problem.origin === "bundled" && hasOverride(problem.id);
+  const canReset = problem.origin === "bundled" && overriddenProblemIds.includes(problem.id);
 
-  const handleDelete = (): void => {
+  const handleDelete = async (): Promise<void> => {
+    const bundled = problem.origin === "bundled";
     if (
       window.confirm(
-        `Delete "${problem.title}"? This also removes its attempts and personal bests.`,
+        bundled
+          ? `Hide "${problem.title}"? You can restore it from the Library later.`
+          : `Delete "${problem.title}"? This also removes its attempts and personal bests.`,
       )
     ) {
-      deleteProblem(problem.id);
-      navigate({ to: "/problems", search });
+      setActionError(null);
+      try {
+        await deleteProblem(problem.id);
+        navigate({ to: "/problems", search });
+      } catch (cause) {
+        setActionError(cause instanceof Error ? cause.message : "Could not update the Problem.");
+      }
     }
   };
 
-  const handleReset = (): void => {
+  const handleReset = async (): Promise<void> => {
     if (
       window.confirm(`Reset "${problem.title}" to the original version? Your edits are discarded.`)
     ) {
-      resetProblem(problem.id);
+      setActionError(null);
+      try {
+        await resetProblem(problem.id);
+      } catch (cause) {
+        setActionError(cause instanceof Error ? cause.message : "Could not reset the Problem.");
+      }
     }
   };
 
@@ -88,7 +103,7 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
             {canReset && (
               <button
                 type="button"
-                onClick={handleReset}
+                onClick={() => void handleReset()}
                 className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 hover:border-neutral-500"
               >
                 Reset to original
@@ -96,15 +111,17 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
             )}
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={() => void handleDelete()}
               className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 hover:border-red-500 hover:text-red-400"
             >
-              Delete
+              {problem.origin === "bundled" ? "Hide" : "Delete"}
             </button>
             <span className="mx-1 h-6 w-px bg-neutral-700" aria-hidden="true" />
             <AccountControl />
           </div>
         </div>
+
+        {actionError !== null && <p className="mt-3 text-sm text-rose-400">{actionError}</p>}
 
         <header className="mt-4 mb-8">
           <h1 className="text-2xl font-semibold">{problem.title}</h1>

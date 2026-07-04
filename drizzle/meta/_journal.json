@@ -15,6 +15,13 @@
       "when": 1781820448692,
       "tag": "0001_calm_mockingbird",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783185536584,
+      "tag": "0002_pale_yellow_claw",
+      "breakpoints": true
     }
   ]
 }

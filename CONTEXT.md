@@ -31,11 +31,11 @@ The act of adding a custom Problem by pasting your own code; the result is a cus
 _Avoid_: upload
 
 **Override**:
-A user's edit of a **bundled** Problem, stored locally as a full-Problem copy that shadows the shipped one in the Library (the shipped Problem lives in source and can't be mutated). Reversible: **Reset** drops the Override and restores the shipped version. Custom Problems have no Override — they are edited in place.
+A user's edit of a **bundled** Problem, stored as a private full-Problem copy that shadows the shipped one in the Library (the shipped Problem is global and can't be mutated per user). Reversible: **Reset** drops only the Override and restores the current shipped version. Signed-in Overrides are server-backed; anonymous Overrides remain browser-local. Custom Problems have no Override — they are edited in place.
 _Avoid_: fork, patch
 
 **Tombstone**:
-The local marker that hides a deleted **bundled** Problem from the Library (a shipped Problem can't be removed from source, so it is hidden instead). Deleting a custom Problem needs none — it is simply removed. Either deletion also purges that Problem's Attempts and Personal Bests.
+The private marker that hides a **bundled** Problem from one user's Library (a shipped Problem can't be removed globally, so it is hidden instead). **Restore** drops only the Tombstone. Hiding retains the Problem's Override, Attempts, and Personal Bests so Restore reveals the same personalized state. Signed-in Tombstones are server-backed; anonymous Tombstones remain browser-local.
 _Avoid_: soft delete, hidden flag
 
 ### Practice

@@ -4,7 +4,7 @@ import type { Example, Problem, Solution } from "@shared/types";
 
 interface ProblemDialogProps {
   onClose: () => void;
-  onSubmit: (problem: Problem) => void;
+  onSubmit: (problem: Problem) => void | Promise<void>;
   // When set, the dialog edits an existing Problem: fields are prefilled and its
   // id + origin are preserved on submit. When absent, it creates a new custom one.
   initial?: Problem;
@@ -61,6 +61,7 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
     initial && initial.solutions.length > 0 ? initial.solutions.map(toDraft) : [emptyDraft()],
   );
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const addExample = (): void =>
     setExamples((xs) => [...xs, { input: "", output: "", explanation: "" }]);
@@ -79,7 +80,7 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
   const optional = (value: string): string | undefined =>
     value.trim() === "" ? undefined : value.trim();
 
-  const submit = (): void => {
+  const submit = async (): Promise<void> => {
     // Drop rows with no code, keeping each kept row's id so history stays linked;
     // an Approach defaults to "Custom" so a row is never left unlabelled.
     const cleanedSolutions = solutions.flatMap((s): Solution[] => {
@@ -111,7 +112,7 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
       const explanation = ex.explanation?.trim() ?? "";
       return [explanation === "" ? { input, output } : { input, output, explanation }];
     });
-    onSubmit({
+    const problem: Problem = {
       id: initial?.id ?? crypto.randomUUID(),
       title: title.trim(),
       difficulty,
@@ -128,8 +129,17 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
       expectedSpace: optional(expectedSpace),
       examples: cleanedExamples.length > 0 ? cleanedExamples : undefined,
       solutions: cleanedSolutions,
-    });
-    onClose();
+    };
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onSubmit(problem);
+      onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save the Problem.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -329,10 +339,11 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
           </button>
           <button
             type="button"
-            onClick={submit}
+            onClick={() => void submit()}
+            disabled={submitting}
             className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
           >
-            {editing ? "Save" : "Add"}
+            {submitting ? "Saving…" : editing ? "Save" : "Add"}
           </button>
         </div>
       </div>

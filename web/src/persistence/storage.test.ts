@@ -13,6 +13,7 @@ import {
   loadSettings,
   mergedLibrary,
   recentAttemptsForProblem,
+  restoreBundledProblem,
   saveAttempt,
   saveCustomProblem,
   saveOverride,
@@ -184,7 +185,7 @@ describe("problem overrides", () => {
 });
 
 describe("hideBundledProblem", () => {
-  it("tombstones the id, drops its override, and purges its history", () => {
+  it("tombstones the id while retaining its override and history for Restore", () => {
     saveOverride({ ...makeProblem("two-sum"), title: "edited" });
     saveAttempt(makeAttempt("a1", "two-sum", "two-sum-s", 120));
     saveAttempt(makeAttempt("a2", "p2", "p2-s", 150));
@@ -196,12 +197,14 @@ describe("hideBundledProblem", () => {
     hideBundledProblem("two-sum");
 
     expect(loadHidden()).toEqual(["two-sum"]);
-    expect(hasOverride("two-sum")).toBe(false);
-    // two-sum's history is gone from both stores; p2's is untouched.
-    expect(loadAttempts().some((a) => a.problemId === "two-sum")).toBe(false);
-    expect(bestFor("two-sum", "two-sum-s")).toBeUndefined();
-    expect(loadAttempts().map((a) => a.id)).toEqual(["a2"]);
+    expect(hasOverride("two-sum")).toBe(true);
+    expect(loadAttempts().map((a) => a.id)).toEqual(["a1", "a2"]);
+    expect(bestFor("two-sum", "two-sum-s")?.bestCpm).toBe(120);
     expect(bestFor("p2", "p2-s")?.bestCpm).toBe(150);
+
+    restoreBundledProblem("two-sum");
+    expect(loadHidden()).toEqual([]);
+    expect(mergedLibrary([makeProblem("two-sum")])[0]?.title).toBe("edited");
   });
 
   it("does not duplicate an already-hidden id", () => {

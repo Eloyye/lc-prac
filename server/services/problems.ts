@@ -2,7 +2,15 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { Example, Problem, Solution } from "../../shared/types";
 import { filterProblems } from "../../shared/content/filter";
 import type { Db } from "../db/client";
-import { problemExamples, problems, problemTags, solutions, tags } from "../db/schema";
+import {
+  problemExamples,
+  problemOverrides,
+  problems,
+  problemTags,
+  problemTombstones,
+  solutions,
+  tags,
+} from "../db/schema";
 import type { ProblemExampleRow, ProblemRow, SolutionRow } from "../db/schema";
 
 export type ListProblemsQuery = {
@@ -18,6 +26,12 @@ export type ListProblemsQuery = {
 export type ProblemListResult = {
   problems: Problem[];
   nextCursor: string | null;
+  personalization: ProblemPersonalization | null;
+};
+
+export type ProblemPersonalization = {
+  overriddenProblemIds: string[];
+  hiddenProblems: Problem[];
 };
 
 /** Page size when the caller does not specify `limit`; also the hard ceiling. */
@@ -135,6 +149,37 @@ function loadActiveBundledProblems(db: Db): Problem[] {
   return assembleProblems(db, rows);
 }
 
+function loadPersonalization(
+  db: Db,
+  bundled: Problem[],
+  userId: string,
+): { active: Problem[]; metadata: ProblemPersonalization } {
+  const overrideRows = db
+    .select()
+    .from(problemOverrides)
+    .where(eq(problemOverrides.userId, userId))
+    .all();
+  const tombstoneRows = db
+    .select()
+    .from(problemTombstones)
+    .where(eq(problemTombstones.userId, userId))
+    .all();
+
+  const overrides = new Map(
+    overrideRows.map((row) => [row.bundledProblemId, JSON.parse(row.snapshotJson) as Problem]),
+  );
+  const hiddenIds = new Set(tombstoneRows.map((row) => row.bundledProblemId));
+  const effective = bundled.map((problem) => overrides.get(problem.id) ?? problem);
+
+  return {
+    active: effective.filter((problem) => !hiddenIds.has(problem.id)),
+    metadata: {
+      overriddenProblemIds: overrideRows.map((row) => row.bundledProblemId),
+      hiddenProblems: effective.filter((problem) => hiddenIds.has(problem.id)),
+    },
+  };
+}
+
 /**
  * The caller's effective Library list. For anonymous callers this is the pristine
  * bundled Library; the `q` / `difficulty` / `tag` / `origin` filters use the same
@@ -142,14 +187,20 @@ function loadActiveBundledProblems(db: Db): Problem[] {
  * filtered result. `nextCursor` is the id to pass as the next `cursor`, or null
  * when the page is the last one.
  */
-export function listProblems(db: Db, query: ListProblemsQuery = {}): ProblemListResult {
+export function listProblems(
+  db: Db,
+  query: ListProblemsQuery = {},
+  userId?: string,
+): ProblemListResult {
   // Archived bundled Problems do not exist (only custom Problems archive), so an
   // explicit `status=archived` request yields nothing for the anonymous library.
   if (query.status === "archived") {
-    return { problems: [], nextCursor: null };
+    return { problems: [], nextCursor: null, personalization: null };
   }
 
-  const all = loadActiveBundledProblems(db);
+  const bundled = loadActiveBundledProblems(db);
+  const personalized = userId === undefined ? null : loadPersonalization(db, bundled, userId);
+  const all = personalized?.active ?? bundled;
   let filtered = filterProblems(all, {
     query: query.q ?? "",
     difficulty: query.difficulty ?? "all",
@@ -168,19 +219,91 @@ export function listProblems(db: Db, query: ListProblemsQuery = {}): ProblemList
   const reachedEnd = startIndex + page.length >= filtered.length;
   const nextCursor = reachedEnd || page.length === 0 ? null : page[page.length - 1]!.id;
 
-  return { problems: page, nextCursor };
+  return { problems: page, nextCursor, personalization: personalized?.metadata ?? null };
 }
 
 /**
  * One readable effective Problem by its logical id, or null when no active
  * bundled Problem has that id (a bad URL, or a future Tombstoned/archived one).
  */
-export function getProblem(db: Db, id: string): Problem | null {
+export function getProblem(db: Db, id: string, userId?: string): Problem | null {
   const row = db
     .select()
     .from(problems)
     .where(and(eq(problems.id, id), eq(problems.origin, "bundled"), isNull(problems.archivedAtMs)))
     .get();
   if (row === undefined) return null;
-  return assembleProblems(db, [row])[0] ?? null;
+  const bundled = assembleProblems(db, [row])[0] ?? null;
+  if (bundled === null || userId === undefined) return bundled;
+
+  const tombstone = db
+    .select({ id: problemTombstones.bundledProblemId })
+    .from(problemTombstones)
+    .where(and(eq(problemTombstones.userId, userId), eq(problemTombstones.bundledProblemId, id)))
+    .get();
+  if (tombstone !== undefined) return null;
+
+  const override = db
+    .select({ snapshotJson: problemOverrides.snapshotJson })
+    .from(problemOverrides)
+    .where(and(eq(problemOverrides.userId, userId), eq(problemOverrides.bundledProblemId, id)))
+    .get();
+  return override === undefined ? bundled : (JSON.parse(override.snapshotJson) as Problem);
+}
+
+function bundledProblemExists(db: Db, id: string): boolean {
+  return (
+    db
+      .select({ id: problems.id })
+      .from(problems)
+      .where(and(eq(problems.id, id), eq(problems.origin, "bundled")))
+      .get() !== undefined
+  );
+}
+
+export function saveProblemOverride(
+  db: Db,
+  userId: string,
+  snapshot: Problem,
+  now = Date.now(),
+): boolean {
+  if (!bundledProblemExists(db, snapshot.id)) return false;
+  db.insert(problemOverrides)
+    .values({
+      userId,
+      bundledProblemId: snapshot.id,
+      snapshotJson: JSON.stringify(snapshot),
+      updatedAtMs: now,
+    })
+    .onConflictDoUpdate({
+      target: [problemOverrides.userId, problemOverrides.bundledProblemId],
+      set: { snapshotJson: JSON.stringify(snapshot), updatedAtMs: now },
+    })
+    .run();
+  return true;
+}
+
+export function hideBundledProblem(db: Db, userId: string, id: string, now = Date.now()): boolean {
+  if (!bundledProblemExists(db, id)) return false;
+  db.insert(problemTombstones)
+    .values({ userId, bundledProblemId: id, hiddenAtMs: now })
+    .onConflictDoNothing()
+    .run();
+  return true;
+}
+
+export function restoreBundledProblem(db: Db, userId: string, id: string): boolean {
+  if (!bundledProblemExists(db, id)) return false;
+  db.delete(problemTombstones)
+    .where(and(eq(problemTombstones.userId, userId), eq(problemTombstones.bundledProblemId, id)))
+    .run();
+  return true;
+}
+
+export function resetBundledProblem(db: Db, userId: string, id: string): boolean {
+  if (!bundledProblemExists(db, id)) return false;
+  db.delete(problemOverrides)
+    .where(and(eq(problemOverrides.userId, userId), eq(problemOverrides.bundledProblemId, id)))
+    .run();
+  return true;
 }

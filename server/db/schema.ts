@@ -2,11 +2,11 @@ import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
- * Database schema for Better Auth and the Problem Library. Per-user
- * personalization (Overrides, Tombstones) and history (Attempts, Personal
- * Bests) land in later phases, so the columns reserved for them (`ownerUserId`,
- * `archivedAtMs`) stay null for bundled rows but are defined now to keep this
- * the canonical table.
+ * Database schema for Better Auth and the Problem Library. Per-user bundled
+ * personalization lives in the Override and Tombstone tables below. History
+ * (Attempts, Personal Bests) lands in a later phase, while the columns reserved
+ * for custom ownership (`ownerUserId`, `archivedAtMs`) stay null for bundled
+ * rows.
  *
  * See docs/BACKEND_INTEGRATION_SPEC.md §8 for the full target schema.
  */
@@ -161,6 +161,35 @@ export const problemTags = sqliteTable(
     sortOrder: integer("sort_order").notNull().default(0),
   },
   (table) => [primaryKey({ columns: [table.problemId, table.tagId] })],
+);
+
+export const problemOverrides = sqliteTable(
+  "problem_overrides",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    bundledProblemId: text("bundled_problem_id")
+      .notNull()
+      .references(() => problems.id, { onDelete: "cascade" }),
+    snapshotJson: text("snapshot_json").notNull(),
+    updatedAtMs: integer("updated_at_ms").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.bundledProblemId] })],
+);
+
+export const problemTombstones = sqliteTable(
+  "problem_tombstones",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    bundledProblemId: text("bundled_problem_id")
+      .notNull()
+      .references(() => problems.id, { onDelete: "cascade" }),
+    hiddenAtMs: integer("hidden_at_ms").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.bundledProblemId] })],
 );
 
 export type ProblemRow = typeof problems.$inferSelect;

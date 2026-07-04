@@ -17,6 +17,10 @@ export function Library() {
   const load = useLibrary((s) => s.load);
   const saveProblem = useLibrary((s) => s.saveProblem);
   const deleteProblem = useLibrary((s) => s.deleteProblem);
+  const restoreProblem = useLibrary((s) => s.restoreProblem);
+  const resetProblem = useLibrary((s) => s.resetProblem);
+  const hiddenProblems = useLibrary((s) => s.hiddenProblems);
+  const overriddenProblemIds = useLibrary((s) => s.overriddenProblemIds);
   const openPalette = usePreferences((s) => s.openPalette);
   const openSettings = usePreferences((s) => s.openSettings);
 
@@ -29,6 +33,16 @@ export function Library() {
   const tag = search.tag ?? null;
 
   const [importing, setImporting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const runAction = async (action: () => Promise<void>): Promise<void> => {
+    setActionError(null);
+    try {
+      await action();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Could not update the Problem.");
+    }
+  };
 
   const setQuery = (value: string): void => {
     navigate({
@@ -159,6 +173,43 @@ export function Library() {
             ))}
           </div>
         )}
+
+        {status === "ready" && hiddenProblems.length > 0 && (
+          <section className="mt-8 border-t border-neutral-800 pt-6">
+            <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
+              Hidden problems
+            </h2>
+            <div className="mt-3 flex flex-col gap-2">
+              {hiddenProblems.map((problem) => (
+                <div
+                  key={problem.id}
+                  className="flex items-center justify-between gap-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+                >
+                  <span className="text-sm text-neutral-300">{problem.title}</span>
+                  <div className="flex items-center gap-2">
+                    {overriddenProblemIds.includes(problem.id) && (
+                      <button
+                        type="button"
+                        onClick={() => void runAction(() => resetProblem(problem.id))}
+                        className="text-xs text-neutral-500 hover:text-neutral-200"
+                      >
+                        Reset
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void runAction(() => restoreProblem(problem.id))}
+                      className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-emerald-500 hover:text-white"
+                    >
+                      Restore
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+        {actionError !== null && <p className="mt-3 text-sm text-rose-400">{actionError}</p>}
       </div>
 
       {importing && <ProblemDialog onClose={() => setImporting(false)} onSubmit={saveProblem} />}

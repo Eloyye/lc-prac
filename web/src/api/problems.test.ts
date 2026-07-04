@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Problem } from "@shared/types";
 import { ApiError } from "./client";
-import { getProblem, listProblems } from "./problems";
+import {
+  getProblem,
+  hideBundledProblem,
+  listProblems,
+  resetBundledProblem,
+  restoreBundledProblem,
+  updateBundledProblem,
+} from "./problems";
 
 const twoSum: Problem = {
   id: "two-sum",
@@ -12,8 +19,10 @@ const twoSum: Problem = {
   solutions: [],
 };
 
-function stubFetch(impl: (url: string) => Response | Promise<Response>) {
-  const fn = vi.fn((input: RequestInfo | URL) => Promise.resolve(impl(String(input))));
+function stubFetch(impl: (url: string, init?: RequestInit) => Response | Promise<Response>) {
+  const fn = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+    Promise.resolve(impl(String(input), init)),
+  );
   vi.stubGlobal("fetch", fn);
   return fn;
 }
@@ -93,5 +102,34 @@ describe("getProblem", () => {
     );
 
     await expect(getProblem("two-sum")).rejects.toMatchObject({ status: 0, code: "NETWORK" });
+  });
+});
+
+describe("bundled personalization mutations", () => {
+  it("PATCHes a complete Override snapshot as JSON", async () => {
+    const fetchSpy = stubFetch(() => jsonResponse({ problem: twoSum }));
+
+    await updateBundledProblem("two/sum", twoSum);
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/problems/two%2Fsum",
+      expect.objectContaining({
+        method: "PATCH",
+        credentials: "same-origin",
+        body: JSON.stringify(twoSum),
+      }),
+    );
+  });
+
+  it.each([
+    ["hide", hideBundledProblem, "/api/problems/two-sum", "DELETE"],
+    ["restore", restoreBundledProblem, "/api/problems/two-sum/restore", "POST"],
+    ["reset", resetBundledProblem, "/api/problems/two-sum/reset", "POST"],
+  ] as const)("calls the %s endpoint", async (_name, action, url, method) => {
+    const fetchSpy = stubFetch(() => jsonResponse({ ok: true }));
+
+    await action("two-sum");
+
+    expect(fetchSpy).toHaveBeenCalledWith(url, expect.objectContaining({ method }));
   });
 });

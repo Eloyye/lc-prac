@@ -1,11 +1,21 @@
 import { create } from "zustand";
 import type { Problem, Solution } from "@shared/types";
-import { listProblems } from "../api/problems";
+import {
+  hideBundledProblem as hideBundledProblemOnServer,
+  listProblems,
+  resetBundledProblem as resetBundledProblemOnServer,
+  restoreBundledProblem as restoreBundledProblemOnServer,
+  updateBundledProblem,
+} from "../api/problems";
 import {
   clearOverride,
   deleteCustomProblem,
   hideBundledProblem,
+  loadCustomProblems,
+  loadHidden,
+  loadOverrides,
   mergedLibrary,
+  restoreBundledProblem,
   saveCustomProblem,
   saveOverride,
 } from "../persistence/storage";
@@ -13,56 +23,70 @@ import {
 export type LibraryStatus = "idle" | "loading" | "ready" | "error";
 
 interface LibraryState {
-  /** The effective Library: API bundled Problems with local edits, plus customs. */
+  /** The effective Library for the current anonymous browser or signed-in user. */
   problems: Problem[];
-  /**
-   * The pristine bundled set fetched from the API, kept as the merge source so
-   * local edits/deletes can re-derive `problems` without another request.
-   */
+  /** The active bundled response used as the merge source for anonymous local state. */
   bundled: Problem[];
+  /** Tombstoned bundled Problems available for Restore. */
+  hiddenProblems: Problem[];
+  /** Bundled ids currently shadowed by an Override (visible or hidden). */
+  overriddenProblemIds: string[];
+  authenticated: boolean;
   status: LibraryStatus;
-  /** A human-readable message when `status === "error"`, else null. */
   error: string | null;
-  /** Fetch the bundled Library from the API and (re)merge local personalization. */
   load: () => Promise<void>;
-  /** Resolve once the Library is loaded, kicking off a load if needed. */
   ensureLoaded: () => Promise<void>;
-  /** Create or update a Problem — a bundled id writes an override, else a custom. */
-  saveProblem: (problem: Problem) => void;
-  /** Delete a Problem — a bundled id is tombstoned, else the custom is removed. */
-  deleteProblem: (id: string) => void;
-  /** Revert an edited bundled Problem to its shipped version; a no-op otherwise. */
-  resetProblem: (id: string) => void;
+  saveProblem: (problem: Problem) => Promise<void>;
+  deleteProblem: (id: string) => Promise<void>;
+  restoreProblem: (id: string) => Promise<void>;
+  resetProblem: (id: string) => Promise<void>;
 }
 
-// An id present in the API-sourced bundled set routes edits/deletes to the
-// override/tombstone layer; any other id is treated as a custom Problem.
-function isBundledId(bundled: Problem[], id: string): boolean {
-  return bundled.some((problem) => problem.id === id);
+type EffectiveState = Pick<
+  LibraryState,
+  "problems" | "hiddenProblems" | "overriddenProblemIds" | "authenticated"
+>;
+
+function localEffectiveState(bundled: Problem[]): EffectiveState {
+  const overrides = loadOverrides();
+  const hiddenIds = new Set(loadHidden());
+  return {
+    problems: mergedLibrary(bundled),
+    hiddenProblems: bundled
+      .filter((problem) => hiddenIds.has(problem.id))
+      .map((problem) => overrides[problem.id] ?? problem),
+    overriddenProblemIds: Object.keys(overrides),
+    authenticated: false,
+  };
 }
 
-// Re-derive the effective Library from the fetched bundled set plus the local
-// override/tombstone/custom layers, which remain browser-local until accounts
-// move them server-side in a later phase.
-function remerge(bundled: Problem[]): Problem[] {
-  return mergedLibrary(bundled);
-}
-
-// Shared in-flight load so concurrent callers (route loaders, the shell effect)
-// trigger exactly one request. Cleared when settled so a failed load can retry.
 let loadPromise: Promise<void> | null = null;
 
 export const useLibrary = create<LibraryState>((set, get) => ({
   problems: [],
   bundled: [],
+  hiddenProblems: [],
+  overriddenProblemIds: [],
+  authenticated: false,
   status: "idle",
   error: null,
 
   load: async () => {
     set({ status: "loading", error: null });
     try {
-      const { problems: bundled } = await listProblems();
-      set({ bundled, problems: remerge(bundled), status: "ready", error: null });
+      const response = await listProblems();
+      const bundled = response.problems;
+      const effective: EffectiveState =
+        response.personalization === null || response.personalization === undefined
+          ? localEffectiveState(bundled)
+          : {
+              // Custom Problems remain local until issue #24 moves their ownership.
+              problems: [...bundled, ...loadCustomProblems()],
+              hiddenProblems: response.personalization.hiddenProblems,
+              overriddenProblemIds: response.personalization.overriddenProblemIds,
+              authenticated: true,
+            };
+      set({ bundled, ...effective, status: "ready", error: null });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Failed to load the library.";
       set({ status: "error", error: message });
@@ -74,8 +98,6 @@ export const useLibrary = create<LibraryState>((set, get) => ({
     const { status, load } = get();
     if (status === "ready") return Promise.resolve();
     if (loadPromise === null) {
-      // Swallow the rejection here (callers observe failure via `status`/`error`);
-      // a thrown load would otherwise become an unhandled rejection on the shell.
       loadPromise = load()
         .catch(() => {})
         .finally(() => {
@@ -85,44 +107,78 @@ export const useLibrary = create<LibraryState>((set, get) => ({
     return loadPromise;
   },
 
-  saveProblem: (problem) => {
-    const { bundled } = get();
-    if (isBundledId(bundled, problem.id)) {
-      saveOverride(problem);
-    } else {
-      saveCustomProblem(problem);
+  saveProblem: async (problem) => {
+    const { authenticated, bundled, load } = get();
+    if (problem.origin === "bundled") {
+      if (authenticated) {
+        await updateBundledProblem(problem.id, problem);
+        await load();
+      } else {
+        saveOverride(problem);
+        set(localEffectiveState(bundled));
+      }
+      return;
     }
-    set({ problems: remerge(bundled) });
-  },
-  deleteProblem: (id) => {
-    const { bundled } = get();
-    if (isBundledId(bundled, id)) {
-      hideBundledProblem(id);
+    saveCustomProblem(problem);
+    if (authenticated) {
+      set((state) => ({
+        problems: [...state.problems.filter((item) => item.id !== problem.id), problem],
+      }));
     } else {
-      deleteCustomProblem(id);
+      set(localEffectiveState(bundled));
     }
-    set({ problems: remerge(bundled) });
   },
-  resetProblem: (id) => {
-    const { bundled } = get();
-    if (!isBundledId(bundled, id)) return;
-    clearOverride(id);
-    set({ problems: remerge(bundled) });
+
+  deleteProblem: async (id) => {
+    const { authenticated, bundled, load, problems } = get();
+    const problem = problems.find((item) => item.id === id);
+    if (problem?.origin === "bundled") {
+      if (authenticated) {
+        await hideBundledProblemOnServer(id);
+        await load();
+      } else {
+        hideBundledProblem(id);
+        set(localEffectiveState(bundled));
+      }
+      return;
+    }
+    deleteCustomProblem(id);
+    if (authenticated) {
+      set((state) => ({ problems: state.problems.filter((item) => item.id !== id) }));
+    } else {
+      set(localEffectiveState(bundled));
+    }
+  },
+
+  restoreProblem: async (id) => {
+    const { authenticated, bundled, load } = get();
+    if (authenticated) {
+      await restoreBundledProblemOnServer(id);
+      await load();
+    } else {
+      restoreBundledProblem(id);
+      set(localEffectiveState(bundled));
+    }
+  },
+
+  resetProblem: async (id) => {
+    const { authenticated, bundled, load, overriddenProblemIds } = get();
+    if (!overriddenProblemIds.includes(id)) return;
+    if (authenticated) {
+      await resetBundledProblemOnServer(id);
+      await load();
+    } else {
+      clearOverride(id);
+      set(localEffectiveState(bundled));
+    }
   },
 }));
 
-/**
- * Route-loader helper: await Library hydration, then resolve the requested
- * Problem. Returns null only when the Problem genuinely is not in the loaded
- * Library, so a direct navigation or refresh waits for the async load instead of
- * transiently resolving not-found before data arrives.
- */
 export async function resolveProblem(problemId: string): Promise<Problem | null> {
   await useLibrary.getState().ensureLoaded();
   return useLibrary.getState().problems.find((problem) => problem.id === problemId) ?? null;
 }
 
-/** Route-loader helper: await hydration, then resolve a Problem + one Solution. */
 export async function resolveSession(
   problemId: string,
   solutionId: string,
