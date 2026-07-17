@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Problem, Solution } from "@shared/types";
 import { computeMetrics } from "../typing-engine";
+import { createAttempt } from "../api/attempts";
 import { useSession } from "../store/session";
 import { usePreferences } from "../store/preferences";
-import { bestFor, saveAttempt } from "../persistence/storage";
 import { ReferenceEditor } from "../editor/ReferenceEditor";
 import { TypingEditor } from "../editor/TypingEditor";
 import { Hud } from "./Hud";
 import { ProblemStatementPanel } from "./ProblemStatementPanel";
 import { Results } from "./Results";
+import type { ResultSaveState } from "./Results";
 
 interface SessionViewProps {
   problem: Problem;
@@ -31,8 +32,8 @@ function blocksSessionShortcut(target: EventTarget | null): boolean {
 export function SessionView({ problem, solution, onExit, onNext }: SessionViewProps) {
   const [attemptKey, setAttemptKey] = useState(0);
   const [now, setNow] = useState(() => Date.now());
-  const [savedBest, setSavedBest] = useState<number | null>(null);
-  const [isNewBest, setIsNewBest] = useState(false);
+  const [saveState, setSaveState] = useState<ResultSaveState>({ status: "saving" });
+  const completedAttemptId = useRef<string | null>(null);
   const previousMode = useRef(usePreferences.getState().mode);
 
   const mode = usePreferences((s) => s.mode);
@@ -73,6 +74,7 @@ export function SessionView({ problem, solution, onExit, onNext }: SessionViewPr
   );
 
   const handleComplete = (): void => {
+    if (completedAttemptId.current !== null) return;
     const s = useSession.getState();
     const durationMs = (s.finishedAt ?? Date.now()) - (s.startedAt ?? Date.now());
     const final = computeMetrics({
@@ -81,9 +83,11 @@ export function SessionView({ problem, solution, onExit, onNext }: SessionViewPr
       errorKeystrokes: s.errorKeystrokes,
       elapsedMs: durationMs,
     });
-    const previousBest = bestFor(problem.id, solution.id, mode)?.bestCpm ?? null;
-    saveAttempt({
-      id: crypto.randomUUID(),
+    const attemptId = crypto.randomUUID();
+    completedAttemptId.current = attemptId;
+    setSaveState({ status: "saving" });
+    void createAttempt({
+      id: attemptId,
       problemId: problem.id,
       solutionId: solution.id,
       mode,
@@ -91,16 +95,32 @@ export function SessionView({ problem, solution, onExit, onNext }: SessionViewPr
       wpm: final.wpm,
       accuracyPct: final.accuracyPct,
       durationMs,
+      totalKeystrokes: s.totalKeystrokes,
+      errorKeystrokes: s.errorKeystrokes,
+      correctChars: s.correctChars,
       createdAt: new Date().toISOString(),
-    });
-    setSavedBest(previousBest === null ? final.cpm : Math.max(previousBest, final.cpm));
-    setIsNewBest(previousBest === null || final.cpm > previousBest);
+    })
+      .then((response) => {
+        if (completedAttemptId.current !== attemptId) return;
+        setSaveState({
+          status: "saved",
+          bestCpm: response.bestScore.bestCpm,
+          isPersonalBest: response.isPersonalBest,
+        });
+      })
+      .catch((cause: unknown) => {
+        if (completedAttemptId.current !== attemptId) return;
+        setSaveState({
+          status: "error",
+          message: cause instanceof Error ? cause.message : "Please try again later.",
+        });
+      });
   };
 
   const handleRetry = useCallback((): void => {
     reset();
-    setSavedBest(null);
-    setIsNewBest(false);
+    completedAttemptId.current = null;
+    setSaveState({ status: "saving" });
     setNow(Date.now());
     setAttemptKey((k) => k + 1);
   }, [reset]);
@@ -218,8 +238,7 @@ export function SessionView({ problem, solution, onExit, onNext }: SessionViewPr
           <Results
             metrics={metrics}
             durationMs={elapsedMs}
-            bestCpm={savedBest}
-            isNewBest={isNewBest}
+            saveState={saveState}
             onRetry={handleRetry}
             onExit={exit}
             onNext={onNext === undefined ? undefined : handleNext}

@@ -20,13 +20,14 @@ import {
   updateCustomProblem,
 } from "../services/problems";
 import type { CustomProblemMutationResult, ListProblemsQuery } from "../services/problems";
+import { isNonEmptyString, isRecord } from "./validation";
+import type { FieldErrors } from "./validation";
 
 const DIFFICULTIES = new Set(["easy", "medium", "hard"]);
 const ORIGINS = new Set(["bundled", "custom"]);
 const STATUSES = new Set(["active", "archived"]);
 
 type RouterVariables = RequestLoggerVariables & AuthVariables;
-type FieldErrors = Record<string, string[]>;
 type ParsedQuery = { ok: true; value: ListProblemsQuery } | { ok: false; fieldErrors: FieldErrors };
 type ParsedProblem = { ok: true; value: Problem } | { ok: false; fieldErrors: FieldErrors };
 
@@ -70,14 +71,6 @@ function parseListQuery(raw: Record<string, string>): ParsedQuery {
   return Object.keys(fieldErrors).length > 0 ? { ok: false, fieldErrors } : { ok: true, value };
 }
 
-function object(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function nonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim() !== "";
-}
-
 function optionalString(value: unknown, field: string, errors: FieldErrors): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   if (typeof value !== "string") {
@@ -90,11 +83,11 @@ function optionalString(value: unknown, field: string, errors: FieldErrors): str
 
 /** Validate and normalize the complete Problem document accepted by writes. */
 function parseProblem(body: unknown, origin: Problem["origin"], routeId?: string): ParsedProblem {
-  if (!object(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };
+  if (!isRecord(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };
   const errors: FieldErrors = {};
-  if (!nonEmptyString(body.id)) errors.id = ["A non-empty id is required."];
+  if (!isNonEmptyString(body.id)) errors.id = ["A non-empty id is required."];
   else if (routeId !== undefined && body.id !== routeId) errors.id = ["Must match the route id."];
-  if (!nonEmptyString(body.title)) errors.title = ["A non-empty title is required."];
+  if (!isNonEmptyString(body.title)) errors.title = ["A non-empty title is required."];
   if (typeof body.difficulty !== "string" || !DIFFICULTIES.has(body.difficulty)) {
     errors.difficulty = ["Must be one of easy, medium, hard."];
   }
@@ -109,7 +102,7 @@ function parseProblem(body: unknown, origin: Problem["origin"], routeId?: string
   if (!Array.isArray(body.tags)) errors.tags = ["Must be an array of strings."];
   else {
     for (const tag of body.tags) {
-      if (!nonEmptyString(tag)) {
+      if (!isNonEmptyString(tag)) {
         errors.tags = ["Every tag must be a non-empty string."];
         break;
       }
@@ -125,18 +118,20 @@ function parseProblem(body: unknown, origin: Problem["origin"], routeId?: string
     const ids = new Set<string>();
     body.solutions.forEach((candidate, index) => {
       const key = `solutions.${index}`;
-      if (!object(candidate)) {
+      if (!isRecord(candidate)) {
         errors[key] = ["Must be an object."];
         return;
       }
-      if (!nonEmptyString(candidate.id)) errors[`${key}.id`] = ["A non-empty id is required."];
+      if (!isNonEmptyString(candidate.id)) errors[`${key}.id`] = ["A non-empty id is required."];
       else if (ids.has(candidate.id)) errors[`${key}.id`] = ["Solution ids must be unique."];
       else ids.add(candidate.id);
       if (candidate.lang !== "python") errors[`${key}.lang`] = ["Must be python."];
-      if (!nonEmptyString(candidate.approach)) {
+      if (!isNonEmptyString(candidate.approach)) {
         errors[`${key}.approach`] = ["A non-empty approach is required."];
       }
-      if (!nonEmptyString(candidate.code)) errors[`${key}.code`] = ["Non-empty code is required."];
+      if (!isNonEmptyString(candidate.code)) {
+        errors[`${key}.code`] = ["Non-empty code is required."];
+      }
       const timeComplexity = optionalString(
         candidate.timeComplexity,
         `${key}.timeComplexity`,
@@ -148,10 +143,10 @@ function parseProblem(body: unknown, origin: Problem["origin"], routeId?: string
         errors,
       );
       if (
-        nonEmptyString(candidate.id) &&
+        isNonEmptyString(candidate.id) &&
         candidate.lang === "python" &&
-        nonEmptyString(candidate.approach) &&
-        nonEmptyString(candidate.code)
+        isNonEmptyString(candidate.approach) &&
+        isNonEmptyString(candidate.code)
       ) {
         solutionValues.push({
           id: candidate.id,
@@ -171,14 +166,14 @@ function parseProblem(body: unknown, origin: Problem["origin"], routeId?: string
     else {
       body.examples.forEach((candidate, index) => {
         const key = `examples.${index}`;
-        if (!object(candidate)) {
+        if (!isRecord(candidate)) {
           errors[key] = ["Must be an object."];
           return;
         }
-        if (!nonEmptyString(candidate.input)) errors[`${key}.input`] = ["Input is required."];
-        if (!nonEmptyString(candidate.output)) errors[`${key}.output`] = ["Output is required."];
+        if (!isNonEmptyString(candidate.input)) errors[`${key}.input`] = ["Input is required."];
+        if (!isNonEmptyString(candidate.output)) errors[`${key}.output`] = ["Output is required."];
         const explanation = optionalString(candidate.explanation, `${key}.explanation`, errors);
-        if (nonEmptyString(candidate.input) && nonEmptyString(candidate.output)) {
+        if (isNonEmptyString(candidate.input) && isNonEmptyString(candidate.output)) {
           exampleValues.push({
             input: candidate.input.trim(),
             output: candidate.output.trim(),

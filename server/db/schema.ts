@@ -1,12 +1,11 @@
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
  * Database schema for Better Auth and the Problem Library. Per-user bundled
  * personalization lives in the Override and Tombstone tables below. History
- * (Attempts, Personal Bests) lands in a later phase, while the columns reserved
- * for custom ownership (`ownerUserId`, `archivedAtMs`) stay null for bundled
- * rows.
+ * The columns reserved for custom ownership (`ownerUserId`, `archivedAtMs`)
+ * stay null for bundled rows.
  *
  * See docs/BACKEND_INTEGRATION_SPEC.md §8 for the full target schema.
  */
@@ -196,7 +195,69 @@ export const problemTombstones = sqliteTable(
   (table) => [primaryKey({ columns: [table.userId, table.bundledProblemId] })],
 );
 
+/**
+ * Immutable completed-Session metrics. Titles and approaches are deliberately
+ * copied into each row so history remains readable after edits or archival.
+ */
+export const attempts = sqliteTable(
+  "attempts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    problemId: text("problem_id")
+      .notNull()
+      .references(() => problems.id),
+    // Logical id only: a bundled Override's Solution lives in snapshot_json.
+    solutionId: text("solution_id").notNull(),
+    problemTitle: text("problem_title").notNull(),
+    solutionApproach: text("solution_approach").notNull(),
+    mode: text("mode", { enum: ["copy", "recall", "free"] }).notNull(),
+    cpm: real("cpm").notNull(),
+    wpm: real("wpm").notNull(),
+    accuracyPct: real("accuracy_pct").notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    totalKeystrokes: integer("total_keystrokes").notNull(),
+    errorKeystrokes: integer("error_keystrokes").notNull(),
+    correctChars: integer("correct_chars").notNull(),
+    errorMapJson: text("error_map_json"),
+    createdAtMs: integer("created_at_ms").notNull(),
+  },
+  (table) => [
+    index("attempts_user_id_created_at_ms_idx").on(table.userId, table.createdAtMs),
+    index("attempts_user_id_problem_id_idx").on(table.userId, table.problemId),
+  ],
+);
+
+/** One Mode-specific Personal Best, derived transactionally from Attempts. */
+export const bestScores = sqliteTable(
+  "best_scores",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    problemId: text("problem_id")
+      .notNull()
+      .references(() => problems.id),
+    solutionId: text("solution_id").notNull(),
+    mode: text("mode", { enum: ["copy", "recall", "free"] }).notNull(),
+    bestCpm: real("best_cpm").notNull(),
+    bestAccuracyPct: real("best_accuracy_pct").notNull(),
+    bestDurationMs: integer("best_duration_ms").notNull(),
+    attemptId: text("attempt_id")
+      .notNull()
+      .references(() => attempts.id),
+    updatedAtMs: integer("updated_at_ms").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.problemId, table.solutionId, table.mode] }),
+  ],
+);
+
 export type ProblemRow = typeof problems.$inferSelect;
 export type SolutionRow = typeof solutions.$inferSelect;
 export type ProblemExampleRow = typeof problemExamples.$inferSelect;
 export type TagRow = typeof tags.$inferSelect;
+export type AttemptRow = typeof attempts.$inferSelect;
+export type BestScoreRow = typeof bestScores.$inferSelect;
