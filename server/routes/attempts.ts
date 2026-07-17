@@ -6,45 +6,37 @@ import { requireUser } from "../middleware/session";
 import type { AuthVariables } from "../middleware/session";
 import { createAttempt } from "../services/attempts";
 import type { CreateAttemptValues } from "../services/attempts";
+import {
+  isFiniteNonNegativeNumber,
+  isNonEmptyString,
+  isNonNegativeInteger,
+  isRecord,
+} from "./validation";
+import type { FieldErrors } from "./validation";
 
 type RouterVariables = RequestLoggerVariables & AuthVariables;
-type FieldErrors = Record<string, string[]>;
 type ParsedAttempt =
   | { ok: true; value: CreateAttemptValues }
   | { ok: false; fieldErrors: FieldErrors };
 
 const MODES = new Set<Mode>(["copy", "recall", "free"]);
 
-function object(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function nonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim() !== "";
-}
-
-function finiteNonNegative(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
-
-function nonNegativeInteger(value: unknown): value is number {
-  return finiteNonNegative(value) && Number.isInteger(value);
-}
-
 function parseAttempt(body: unknown): ParsedAttempt {
-  if (!object(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };
+  if (!isRecord(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };
   const errors: FieldErrors = {};
-  if (!nonEmptyString(body.id)) errors.id = ["A client-generated id is required."];
-  if (!nonEmptyString(body.problemId)) errors.problemId = ["A Problem id is required."];
-  if (!nonEmptyString(body.solutionId)) errors.solutionId = ["A Solution id is required."];
+  if (!isNonEmptyString(body.id)) errors.id = ["A client-generated id is required."];
+  if (!isNonEmptyString(body.problemId)) errors.problemId = ["A Problem id is required."];
+  if (!isNonEmptyString(body.solutionId)) errors.solutionId = ["A Solution id is required."];
   if (typeof body.mode !== "string" || !MODES.has(body.mode as Mode)) {
     errors.mode = ["Must be one of copy, recall, free."];
   }
 
   for (const field of ["cpm", "wpm", "accuracyPct"] as const) {
-    if (!finiteNonNegative(body[field])) errors[field] = ["Must be a finite non-negative number."];
+    if (!isFiniteNonNegativeNumber(body[field])) {
+      errors[field] = ["Must be a finite non-negative number."];
+    }
   }
-  if (finiteNonNegative(body.accuracyPct) && body.accuracyPct > 100) {
+  if (isFiniteNonNegativeNumber(body.accuracyPct) && body.accuracyPct > 100) {
     errors.accuracyPct = ["Must be between 0 and 100."];
   }
   for (const field of [
@@ -53,13 +45,13 @@ function parseAttempt(body: unknown): ParsedAttempt {
     "errorKeystrokes",
     "correctChars",
   ] as const) {
-    if (!nonNegativeInteger(body[field])) {
+    if (!isNonNegativeInteger(body[field])) {
       errors[field] = ["Must be a non-negative integer."];
     }
   }
   if (
-    nonNegativeInteger(body.errorKeystrokes) &&
-    nonNegativeInteger(body.totalKeystrokes) &&
+    isNonNegativeInteger(body.errorKeystrokes) &&
+    isNonNegativeInteger(body.totalKeystrokes) &&
     body.errorKeystrokes > body.totalKeystrokes
   ) {
     errors.errorKeystrokes = ["Cannot exceed totalKeystrokes."];
