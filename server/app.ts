@@ -8,6 +8,7 @@ import { sessionContext } from "./middleware/session";
 import type { AuthVariables } from "./middleware/session";
 import { health } from "./routes/health";
 import { me } from "./routes/me";
+import { createAttemptsRouter } from "./routes/attempts";
 import { createProblemsRouter } from "./routes/problems";
 import { createStaticSpa } from "./static";
 
@@ -51,6 +52,7 @@ export function createApp(options: CreateAppOptions) {
   app.route("/api", health);
   app.route("/api/me", me);
   if (options.db !== undefined) {
+    app.route("/api/attempts", createAttemptsRouter(options.db));
     app.route("/api/problems", createProblemsRouter(options.db));
   }
 

@@ -1,11 +1,15 @@
 import { useEffect, useRef } from "react";
 import type { Metrics } from "../typing-engine";
 
+export type ResultSaveState =
+  | { status: "saving" }
+  | { status: "saved"; bestCpm: number; isPersonalBest: boolean }
+  | { status: "error"; message: string };
+
 interface ResultsProps {
   metrics: Metrics;
   durationMs: number;
-  bestCpm: number | null;
-  isNewBest: boolean;
+  saveState: ResultSaveState;
   onRetry: () => void;
   onExit: () => void;
   onNext?: () => void;
@@ -15,8 +19,7 @@ interface ResultsProps {
 export function Results({
   metrics,
   durationMs,
-  bestCpm,
-  isNewBest,
+  saveState,
   onRetry,
   onExit,
   onNext,
@@ -35,7 +38,7 @@ export function Results({
     >
       <div className="w-96 rounded-xl border border-neutral-700 bg-neutral-900 p-6 text-center shadow-xl">
         <h2 className="mb-4 text-lg font-semibold text-neutral-100">
-          Complete{isNewBest ? " · New best!" : ""}
+          Complete{saveState.status === "saved" && saveState.isPersonalBest ? " · New best!" : ""}
         </h2>
         <p className="mb-3 text-xs uppercase tracking-wide text-neutral-500">{mode} mode</p>
         <div className="mb-5 grid grid-cols-2 gap-3 text-left">
@@ -44,9 +47,7 @@ export function Results({
           <Metric label="Accuracy" value={`${Math.round(metrics.accuracyPct)}%`} />
           <Metric label="Time" value={`${(durationMs / 1000).toFixed(1)}s`} />
         </div>
-        {bestCpm !== null && (
-          <p className="mb-4 text-xs text-neutral-500">Best CPM: {Math.round(bestCpm)}</p>
-        )}
+        <SaveStatus state={saveState} />
         <div className="flex gap-2">
           <button
             type="button"
@@ -74,6 +75,28 @@ export function Results({
         </div>
       </div>
     </div>
+  );
+}
+
+function SaveStatus({ state }: { state: ResultSaveState }) {
+  if (state.status === "saving") {
+    return (
+      <p aria-live="polite" className="mb-4 text-xs text-neutral-500">
+        Saving result…
+      </p>
+    );
+  }
+  if (state.status === "error") {
+    return (
+      <p aria-live="polite" className="mb-4 text-xs text-amber-300">
+        Result not saved. {state.message}
+      </p>
+    );
+  }
+  return (
+    <p aria-live="polite" className="mb-4 text-xs text-neutral-500">
+      Saved · Best CPM: {Math.round(state.bestCpm)}
+    </p>
   );
 }
 

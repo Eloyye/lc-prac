@@ -3,6 +3,8 @@ import type { Example, Problem, Solution } from "../../shared/types";
 import { filterProblems } from "../../shared/content/filter";
 import type { Db } from "../db/client";
 import {
+  attempts,
+  bestScores,
   problemExamples,
   problemOverrides,
   problems,
@@ -480,6 +482,14 @@ export function restoreCustomProblem(
 export function permanentlyDeleteCustomProblem(db: Db, userId: string, id: string): boolean {
   const row = ownedCustomRow(db, id, userId);
   if (row === undefined || row.archivedAtMs === null) return false;
-  db.delete(problems).where(eq(problems.id, id)).run();
+  db.transaction((tx) => {
+    tx.delete(bestScores)
+      .where(and(eq(bestScores.userId, userId), eq(bestScores.problemId, id)))
+      .run();
+    tx.delete(attempts)
+      .where(and(eq(attempts.userId, userId), eq(attempts.problemId, id)))
+      .run();
+    tx.delete(problems).where(eq(problems.id, id)).run();
+  });
   return true;
 }
