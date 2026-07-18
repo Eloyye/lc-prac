@@ -255,9 +255,20 @@ export const bestScores = sqliteTable(
   ],
 );
 
+/** The two synchronized preferences currently exposed by the Settings UI. */
+export const userSettings = sqliteTable("user_settings", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  mode: text("mode", { enum: ["copy", "recall", "free"] }).notNull(),
+  distractionFree: integer("distraction_free", { mode: "boolean" }).notNull(),
+  updatedAtMs: integer("updated_at_ms").notNull(),
+});
+
 export type ProblemRow = typeof problems.$inferSelect;
 export type SolutionRow = typeof solutions.$inferSelect;
 export type ProblemExampleRow = typeof problemExamples.$inferSelect;
 export type TagRow = typeof tags.$inferSelect;
 export type AttemptRow = typeof attempts.$inferSelect;
 export type BestScoreRow = typeof bestScores.$inferSelect;
+export type UserSettingsRow = typeof userSettings.$inferSelect;

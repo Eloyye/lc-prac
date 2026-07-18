@@ -74,7 +74,7 @@ export async function apiGet<T>(path: string, params?: QueryParams): Promise<T> 
 
 /** Send a JSON mutation and parse its JSON response (or `undefined` for 204). */
 export async function apiJson<T>(
-  method: "POST" | "PATCH" | "DELETE",
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<T> {
