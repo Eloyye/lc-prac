@@ -16,6 +16,7 @@ import type { LibrarySearch } from "@shared/content/filter";
 import { nextPracticeTarget } from "@shared/content/next";
 import { initStorage } from "./persistence/storage";
 import { resolveProblem, resolveSession, useLibrary } from "./store/library";
+import { useHistory } from "./store/history";
 import { Library } from "./ui/Library";
 import { CommandPalette } from "./ui/CommandPalette";
 import { ProblemDetail } from "./ui/ProblemDetail";
@@ -44,6 +45,7 @@ function validateLibrarySearch(search: Record<string, unknown>): LibrarySearch {
 /** Always-mounted shell; stamps the storage schema and hydrates the Library. */
 function RootLayout() {
   const { data: session, isPending } = authClient.useSession();
+  const userId = session?.user.id ?? null;
   useEffect(() => {
     initStorage();
   }, []);
@@ -52,7 +54,9 @@ function RootLayout() {
     // Session identity changes switch the authoritative custom Problem set.
     useLibrary.setState({ status: "idle" });
     void useLibrary.getState().ensureLoaded();
-  }, [isPending, session?.user.id]);
+    useHistory.getState().reset(userId);
+    if (userId !== null) void useHistory.getState().ensureLoaded();
+  }, [isPending, userId]);
   return (
     <>
       <Outlet />

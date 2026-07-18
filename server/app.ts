@@ -10,6 +10,7 @@ import { health } from "./routes/health";
 import { me } from "./routes/me";
 import { createAttemptsRouter } from "./routes/attempts";
 import { createProblemsRouter } from "./routes/problems";
+import { createStatsRouter } from "./routes/stats";
 import { createStaticSpa } from "./static";
 
 export type AppVariables = RequestLoggerVariables & AuthVariables;
@@ -54,6 +55,7 @@ export function createApp(options: CreateAppOptions) {
   if (options.db !== undefined) {
     app.route("/api/attempts", createAttemptsRouter(options.db));
     app.route("/api/problems", createProblemsRouter(options.db));
+    app.route("/api/stats", createStatsRouter(options.db));
   }
 
   // Static + SPA fallback runs last among matchers: API routes above win, and

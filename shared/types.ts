@@ -97,6 +97,32 @@ export interface CreateAttemptResponse {
   isPersonalBest: boolean;
 }
 
+/** Optional ownership-scoped filters shared by history and aggregate reads. */
+export interface HistoryFilters {
+  problemId?: string;
+  solutionId?: string;
+  mode?: Mode;
+}
+
+export interface AttemptListResponse {
+  attempts: SavedAttempt[];
+}
+
+export interface BestScoreListResponse {
+  bestScores: SavedBestScore[];
+}
+
+/** Account-backed aggregate state for the current Stats page and dashboard. */
+export interface StatsSummary extends HistoryFilters {
+  totalAttempts: number;
+  practicedProblemCount: number;
+  averageCpm: number;
+  averageAccuracyPct: number;
+  bestCpm: number;
+  totalPracticeTimeMs: number;
+  recentAttempts: SavedAttempt[];
+}
+
 export interface Settings {
   mode: Mode;
   distractionFree: boolean;

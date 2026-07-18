@@ -4,6 +4,7 @@ import { useLibrary } from "../store/library";
 import { allTags, filterProblems } from "@shared/content/filter";
 import type { DifficultyFilter } from "@shared/content/filter";
 import { usePreferences } from "../store/preferences";
+import { useHistory } from "../store/history";
 import { ProblemCard } from "./ProblemCard";
 import { ProblemDialog } from "./ProblemDialog";
 import { AccountControl } from "./AccountControl";
@@ -38,6 +39,13 @@ export function Library() {
   const permanentlyDeleteProblem = useLibrary((s) => s.permanentlyDeleteProblem);
   const openPalette = usePreferences((s) => s.openPalette);
   const openSettings = usePreferences((s) => s.openSettings);
+  const mode = usePreferences((s) => s.mode);
+  const bestScores = useHistory((s) => s.bestScores);
+  const historyOwnerUserId = useHistory((s) => s.ownerUserId);
+  const historyStatus = useHistory((s) => s.status);
+  const historyError = useHistory((s) => s.error);
+  const loadHistory = useHistory((s) => s.load);
+  const scopedBestScores = historyOwnerUserId === (session?.user.id ?? null) ? bestScores : [];
 
   const navigate = useNavigate();
   const search = useSearch({ from: "/problems" });
@@ -193,6 +201,22 @@ export function Library() {
 
         {actionError !== null && <p className="mb-4 text-sm text-rose-400">{actionError}</p>}
 
+        {session !== null && (historyStatus === "idle" || historyStatus === "loading") && (
+          <p className="mb-4 text-sm text-neutral-500">Loading Personal Bests…</p>
+        )}
+        {session !== null && historyStatus === "error" && (
+          <div className="mb-4 flex items-center gap-3 text-sm">
+            <p className="text-rose-400">{historyError ?? "Could not load Personal Bests."}</p>
+            <button
+              type="button"
+              onClick={() => void loadHistory().catch(() => {})}
+              className="rounded border border-neutral-700 px-2 py-1 text-neutral-300 hover:border-neutral-500"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {status === "error" ? (
           <div className="flex flex-col items-start gap-3">
             <p className="text-rose-400">{error ?? "Could not load the library."}</p>
@@ -216,6 +240,8 @@ export function Library() {
                   key={problem.id}
                   problem={problem}
                   search={search}
+                  bestScores={scopedBestScores}
+                  mode={mode}
                   onArchive={archive}
                 />
               ) : view === "archived" ? (

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CreateAttemptResponse } from "@shared/types";
-import { createAttempt } from "./attempts";
+import { createAttempt, listAttempts } from "./attempts";
 
 const input = {
   id: "attempt-1",
@@ -84,5 +84,32 @@ describe("createAttempt", () => {
       message: "Save unavailable.",
     });
     expect(input).toEqual(before);
+  });
+});
+
+describe("listAttempts", () => {
+  it("GETs ownership-scoped history with Problem, Solution, Mode, and limit filters", async () => {
+    const fetchSpy = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ attempts: [response.attempt] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(
+      listAttempts({
+        problemId: input.problemId,
+        solutionId: input.solutionId,
+        mode: "recall",
+        limit: 5,
+      }),
+    ).resolves.toEqual({ attempts: [response.attempt] });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/attempts?problemId=two-sum&solutionId=two-sum-hashmap&mode=recall&limit=5",
+      expect.objectContaining({ credentials: "same-origin" }),
+    );
   });
 });

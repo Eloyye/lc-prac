@@ -1,5 +1,11 @@
-import { and, eq } from "drizzle-orm";
-import type { CreateAttemptResponse, Mode, SavedAttempt, SavedBestScore } from "../../shared/types";
+import { and, desc, eq } from "drizzle-orm";
+import type {
+  CreateAttemptResponse,
+  HistoryFilters,
+  Mode,
+  SavedAttempt,
+  SavedBestScore,
+} from "../../shared/types";
 import type { Db } from "../db/client";
 import { attempts, bestScores } from "../db/schema";
 import type { AttemptRow, BestScoreRow } from "../db/schema";
@@ -26,7 +32,7 @@ export type AttemptCreationResult =
   | { kind: "not-found" }
   | { kind: "conflict" };
 
-function toAttempt(row: AttemptRow): SavedAttempt {
+export function toAttempt(row: AttemptRow): SavedAttempt {
   return {
     id: row.id,
     problemId: row.problemId,
@@ -46,7 +52,7 @@ function toAttempt(row: AttemptRow): SavedAttempt {
   };
 }
 
-function toBestScore(row: BestScoreRow): SavedBestScore {
+export function toBestScore(row: BestScoreRow): SavedBestScore {
   return {
     problemId: row.problemId,
     solutionId: row.solutionId,
@@ -57,6 +63,28 @@ function toBestScore(row: BestScoreRow): SavedBestScore {
     attemptId: row.attemptId,
     updatedAt: new Date(row.updatedAtMs).toISOString(),
   };
+}
+
+/** Read only one account's immutable Attempt history, newest first. */
+export function listAttempts(
+  db: Db,
+  userId: string,
+  filters: HistoryFilters = {},
+  limit?: number,
+): SavedAttempt[] {
+  const query = db
+    .select()
+    .from(attempts)
+    .where(
+      and(
+        eq(attempts.userId, userId),
+        filters.problemId === undefined ? undefined : eq(attempts.problemId, filters.problemId),
+        filters.solutionId === undefined ? undefined : eq(attempts.solutionId, filters.solutionId),
+        filters.mode === undefined ? undefined : eq(attempts.mode, filters.mode),
+      ),
+    )
+    .orderBy(desc(attempts.createdAtMs), desc(attempts.id));
+  return (limit === undefined ? query.all() : query.limit(limit).all()).map(toAttempt);
 }
 
 function bestForRow(db: Db, userId: string, row: AttemptRow): BestScoreRow | undefined {

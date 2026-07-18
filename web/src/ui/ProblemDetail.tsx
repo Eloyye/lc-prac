@@ -1,16 +1,21 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import type { Mode, Problem, Solution } from "@shared/types";
-import { bestFor, recentAttemptsForProblem } from "../persistence/storage";
+import type { Mode, Problem, SavedAttempt, Solution } from "@shared/types";
+import { listAttempts } from "../api/attempts";
+import { authClient } from "../api/auth";
+import { bestFor, useHistory } from "../store/history";
 import { useLibrary } from "../store/library";
+import { usePreferences } from "../store/preferences";
 import { DIFFICULTY_COLOR } from "./difficulty";
 import { Markdown } from "./Markdown";
 import { ProblemDialog } from "./ProblemDialog";
+import { RecentAttempts } from "./RecentAttempts";
 import { AccountControl } from "./AccountControl";
 import { HeaderMenu } from "./HeaderMenu";
 import type { HeaderMenuItem } from "./HeaderMenu";
 
 const sectionHeading = "mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500";
+const inlineSectionHeading = "text-sm font-medium uppercase tracking-wide text-neutral-500";
 
 /** Inline (≥md) button styling for a header action, keyed off its menu variant. */
 function actionClass(variant: HeaderMenuItem["variant"]): string {
@@ -20,9 +25,7 @@ function actionClass(variant: HeaderMenuItem["variant"]): string {
     : `${base} text-neutral-300 hover:border-neutral-500`;
 }
 
-// Display label per Mode. Only Copy is wired today (every Attempt is hardcoded to
-// it); Recall and Free are listed so the mode-aware PB/Attempt UI below needs no
-// redesign once they ship — PB is tracked per Mode (see CONTEXT.md).
+// Personal Bests are scoped to the selected Mode (see CONTEXT.md).
 const MODE_LABEL: Record<Mode, string> = {
   copy: "Copy",
   recall: "Recall",
@@ -36,11 +39,8 @@ function complexityLabel(solution: Solution): string | null {
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
 export function ProblemDetail({ problem }: { problem: Problem }) {
+  const { data: session, isPending: sessionPending } = authClient.useSession();
   const navigate = useNavigate();
   const search = useSearch({ from: "/problems/$problemId" });
   const saveProblem = useLibrary((s) => s.saveProblem);
@@ -48,13 +48,47 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
   const resetProblem = useLibrary((s) => s.resetProblem);
   const overriddenProblemIds = useLibrary((s) => s.overriddenProblemIds);
   const actionError = useLibrary((s) => s.actionError);
+  const mode = usePreferences((s) => s.mode);
+  const bestScores = useHistory((s) => s.bestScores);
+  const historyOwnerUserId = useHistory((s) => s.ownerUserId);
+  const historyStatus = useHistory((s) => s.status);
+  const historyError = useHistory((s) => s.error);
+  const loadBestScores = useHistory((s) => s.load);
   const [editing, setEditing] = useState(false);
+  const [attempts, setAttempts] = useState<SavedAttempt[]>([]);
+  const [attemptStatus, setAttemptStatus] = useState<"idle" | "loading" | "ready" | "error">(
+    "idle",
+  );
+  const [attemptError, setAttemptError] = useState<string | null>(null);
+  const attemptRequest = useRef(0);
+  const userId = session?.user.id ?? null;
+  const scopedBestScores = historyOwnerUserId === userId ? bestScores : [];
 
-  const attempts = recentAttemptsForProblem(problem.id);
-  // Attempts only store a solutionId; resolve the approach from the Problem's
-  // current Solutions, tolerating one that has since been removed.
-  const approachFor = (solutionId: string): string =>
-    problem.solutions.find((s) => s.id === solutionId)?.approach ?? "Removed approach";
+  const loadProblemAttempts = useCallback(async (): Promise<void> => {
+    const requestId = ++attemptRequest.current;
+    if (userId === null) {
+      setAttempts([]);
+      setAttemptStatus("ready");
+      setAttemptError(null);
+      return;
+    }
+    setAttemptStatus("loading");
+    setAttemptError(null);
+    try {
+      const response = await listAttempts({ problemId: problem.id, limit: 5 });
+      if (requestId !== attemptRequest.current) return;
+      setAttempts(response.attempts);
+      setAttemptStatus("ready");
+    } catch (cause) {
+      if (requestId !== attemptRequest.current) return;
+      setAttemptStatus("error");
+      setAttemptError(cause instanceof Error ? cause.message : "Could not load Attempt history.");
+    }
+  }, [problem.id, userId]);
+
+  useEffect(() => {
+    if (!sessionPending) void loadProblemAttempts();
+  }, [loadProblemAttempts, sessionPending]);
 
   // A bundled Problem can be reverted only once the user has actually edited it.
   const canReset = problem.origin === "bundled" && overriddenProblemIds.includes(problem.id);
@@ -221,10 +255,26 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
         )}
 
         <section className="mb-8">
-          <h2 className={sectionHeading}>Approaches</h2>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className={inlineSectionHeading}>Approaches</h2>
+            {session !== null && (
+              <button
+                type="button"
+                onClick={() => void loadBestScores().catch(() => {})}
+                className="text-xs text-neutral-500 hover:text-neutral-200"
+              >
+                Refresh PBs
+              </button>
+            )}
+          </div>
+          {session !== null && historyStatus === "error" && (
+            <p className="mb-3 text-sm text-rose-400">
+              {historyError ?? "Could not load Personal Bests."}
+            </p>
+          )}
           <div className="flex flex-col gap-2">
             {problem.solutions.map((solution) => {
-              const best = bestFor(problem.id, solution.id);
+              const best = bestFor(scopedBestScores, problem.id, solution.id, mode);
               const complexity = complexityLabel(solution);
               return (
                 <Link
@@ -243,9 +293,15 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
                     )}
                   </div>
                   <div className="shrink-0 text-right">
-                    <div className="text-xs text-neutral-500">{MODE_LABEL.copy} PB</div>
+                    <div className="text-xs text-neutral-500">{MODE_LABEL[mode]} PB</div>
                     <div className="tabular-nums text-neutral-200">
-                      {best !== undefined ? `${Math.round(best.bestCpm)} CPM` : "—"}
+                      {sessionPending || (session !== null && historyStatus !== "ready")
+                        ? "…"
+                        : session === null
+                          ? "Sign in"
+                          : best !== undefined
+                            ? `${Math.round(best.bestCpm)} CPM`
+                            : "—"}
                     </div>
                   </div>
                 </Link>
@@ -255,38 +311,39 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
         </section>
 
         <section>
-          <h2 className={sectionHeading}>Recent attempts</h2>
-          {attempts.length === 0 ? (
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className={inlineSectionHeading}>Recent attempts</h2>
+            {session !== null && (
+              <button
+                type="button"
+                onClick={() => void loadProblemAttempts()}
+                className="text-xs text-neutral-500 hover:text-neutral-200"
+              >
+                Refresh
+              </button>
+            )}
+          </div>
+          {sessionPending || attemptStatus === "idle" || attemptStatus === "loading" ? (
+            <p className="text-sm text-neutral-500">Loading Attempts…</p>
+          ) : session === null ? (
+            <p className="text-sm text-neutral-500">Sign in to view account-backed history.</p>
+          ) : attemptStatus === "error" ? (
+            <div className="flex items-center gap-3 text-sm">
+              <p className="text-rose-400">{attemptError ?? "Could not load Attempt history."}</p>
+              <button
+                type="button"
+                onClick={() => void loadProblemAttempts()}
+                className="rounded border border-neutral-700 px-2 py-1 text-neutral-300 hover:border-neutral-500"
+              >
+                Retry
+              </button>
+            </div>
+          ) : attempts.length === 0 ? (
             <p className="text-sm text-neutral-500">
               No attempts yet — pick an approach above to start a session.
             </p>
           ) : (
-            <ul className="flex flex-col gap-1.5">
-              {attempts.map((attempt) => (
-                <li
-                  key={attempt.id}
-                  className="flex items-center justify-between gap-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-2 text-sm"
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="truncate text-neutral-200">
-                      {approachFor(attempt.solutionId)}
-                    </span>
-                    <span className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 text-xs text-neutral-400">
-                      {MODE_LABEL[attempt.mode]}
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3 text-xs">
-                    <span className="font-medium tabular-nums text-neutral-200">
-                      {Math.round(attempt.cpm)} CPM
-                    </span>
-                    <span className="tabular-nums text-neutral-500">
-                      {Math.round(attempt.accuracyPct)}%
-                    </span>
-                    <span className="text-neutral-600">{formatDate(attempt.createdAt)}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <RecentAttempts attempts={attempts} />
           )}
         </section>
       </div>

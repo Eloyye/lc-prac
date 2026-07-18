@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { pino } from "pino";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PROBLEMS } from "../../shared/content/problems";
-import type { CreateAttemptResponse, Problem } from "../../shared/types";
+import type { AttemptListResponse, CreateAttemptResponse, Problem } from "../../shared/types";
 import { createApp } from "../app";
 import { createAuth } from "../auth";
 import { openDatabase } from "../db/client";
@@ -183,6 +183,11 @@ describe("POST /api/attempts", () => {
       problemTitle: "My Two Sum",
       solutionApproach: "My private approach",
     });
+    const history = await requestWithCookie("/api/attempts?problemId=two-sum", cookie);
+    expect(((await history.json()) as AttemptListResponse).attempts[0]).toMatchObject({
+      problemTitle: "My Two Sum",
+      solutionApproach: "My private approach",
+    });
   });
 
   it("is idempotent by id and updates Mode-specific PBs using documented tie-breakers", async () => {
@@ -275,5 +280,72 @@ describe("POST /api/attempts", () => {
         .where(and(eq(attempts.problemId, "two-sum"), eq(attempts.id, "bundled-history")))
         .get(),
     ).toBeDefined();
+  });
+});
+
+describe("GET /api/attempts", () => {
+  it("isolates ownership and filters by Problem, Solution, and Mode", async () => {
+    expect((await app.request("/api/attempts")).status).toBe(401);
+    const owner = await signUp("History owner", "history-owner@example.com");
+    const other = await signUp("History other", "history-other@example.com");
+
+    await requestWithCookie(
+      "/api/attempts",
+      owner,
+      "POST",
+      attempt("copy-hash", { createdAt: "2026-07-17T10:00:00.000Z" }),
+    );
+    await requestWithCookie(
+      "/api/attempts",
+      owner,
+      "POST",
+      attempt("recall-hash", {
+        mode: "recall",
+        cpm: 80,
+        createdAt: "2026-07-17T11:00:00.000Z",
+      }),
+    );
+    await requestWithCookie(
+      "/api/attempts",
+      owner,
+      "POST",
+      attempt("copy-brute", {
+        solutionId: "two-sum-brute",
+        createdAt: "2026-07-17T12:00:00.000Z",
+      }),
+    );
+    await requestWithCookie(
+      "/api/attempts",
+      other,
+      "POST",
+      attempt("other-private", { cpm: 999, createdAt: "2026-07-17T13:00:00.000Z" }),
+    );
+
+    const all = (await (
+      await requestWithCookie("/api/attempts?problemId=two-sum", owner)
+    ).json()) as AttemptListResponse;
+    expect(all.attempts.map((candidate) => candidate.id)).toEqual([
+      "copy-brute",
+      "recall-hash",
+      "copy-hash",
+    ]);
+    expect(all.attempts.some((candidate) => candidate.id === "other-private")).toBe(false);
+
+    const recall = (await (
+      await requestWithCookie("/api/attempts?problemId=two-sum&mode=recall", owner)
+    ).json()) as AttemptListResponse;
+    expect(recall.attempts.map((candidate) => candidate.id)).toEqual(["recall-hash"]);
+
+    const brute = (await (
+      await requestWithCookie("/api/attempts?solutionId=two-sum-brute&mode=copy&limit=1", owner)
+    ).json()) as AttemptListResponse;
+    expect(brute.attempts.map((candidate) => candidate.id)).toEqual(["copy-brute"]);
+  });
+
+  it("rejects invalid Mode and limit filters", async () => {
+    const cookie = await signUp("Invalid filters", "history-invalid@example.com");
+    expect((await requestWithCookie("/api/attempts?mode=speed", cookie)).status).toBe(400);
+    expect((await requestWithCookie("/api/attempts?limit=0", cookie)).status).toBe(400);
+    expect((await requestWithCookie("/api/attempts?limit=101", cookie)).status).toBe(400);
   });
 });
