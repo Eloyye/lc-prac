@@ -253,6 +253,25 @@ export function getProblem(db: Db, id: string, userId?: string): Problem | null 
   return override === undefined ? problem : (JSON.parse(override.snapshotJson) as Problem);
 }
 
+/**
+ * Resolve the snapshot used to validate a historical Attempt Import. Unlike a
+ * live Session read, this deliberately includes Tombstoned bundled Problems and
+ * archived owned custom Problems because both retain history by design.
+ */
+export function getProblemForAttemptImport(db: Db, id: string, userId: string): Problem | null {
+  const row = db.select().from(problems).where(eq(problems.id, id)).get();
+  if (row === undefined || (row.origin === "custom" && row.ownerUserId !== userId)) return null;
+  const problem = assembleProblems(db, [row])[0] ?? null;
+  if (problem === null || row.origin === "custom") return problem;
+
+  const override = db
+    .select({ snapshotJson: problemOverrides.snapshotJson })
+    .from(problemOverrides)
+    .where(and(eq(problemOverrides.userId, userId), eq(problemOverrides.bundledProblemId, id)))
+    .get();
+  return override === undefined ? problem : (JSON.parse(override.snapshotJson) as Problem);
+}
+
 function bundledProblemExists(db: Db, id: string): boolean {
   return (
     db
@@ -364,8 +383,8 @@ function replaceChildren(db: Db, problem: Problem, now: number): void {
   });
 }
 
-/** Create a complete custom Problem owned by the authenticated caller. */
-export function createCustomProblem(
+/** Insert complete custom Problem rows without opening a nested transaction. */
+export function insertCustomProblem(
   db: Db,
   userId: string,
   problem: Problem,
@@ -382,27 +401,35 @@ export function createCustomProblem(
     return { kind: "conflict" };
   }
 
-  db.transaction((tx) => {
-    tx.insert(problems)
-      .values({
-        id: problem.id,
-        slug: null,
-        title: problem.title,
-        difficulty: problem.difficulty,
-        origin: "custom",
-        ownerUserId: userId,
-        url: problem.url ?? null,
-        statement: problem.statement ?? null,
-        expectedTime: problem.expectedTime ?? null,
-        expectedSpace: problem.expectedSpace ?? null,
-        archivedAtMs: null,
-        createdAtMs: now,
-        updatedAtMs: now,
-      })
-      .run();
-    replaceChildren(tx as Db, problem, now);
-  });
+  db.insert(problems)
+    .values({
+      id: problem.id,
+      slug: null,
+      title: problem.title,
+      difficulty: problem.difficulty,
+      origin: "custom",
+      ownerUserId: userId,
+      url: problem.url ?? null,
+      statement: problem.statement ?? null,
+      expectedTime: problem.expectedTime ?? null,
+      expectedSpace: problem.expectedSpace ?? null,
+      archivedAtMs: null,
+      createdAtMs: now,
+      updatedAtMs: now,
+    })
+    .run();
+  replaceChildren(db, problem, now);
   return { kind: "ok", problem };
+}
+
+/** Create a complete custom Problem owned by the authenticated caller. */
+export function createCustomProblem(
+  db: Db,
+  userId: string,
+  problem: Problem,
+  now = Date.now(),
+): CustomProblemMutationResult {
+  return db.transaction((tx) => insertCustomProblem(tx as Db, userId, problem, now));
 }
 
 /** Replace the complete editable content of one active, owned custom Problem. */

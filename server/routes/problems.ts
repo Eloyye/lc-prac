@@ -29,7 +29,7 @@ const STATUSES = new Set(["active", "archived"]);
 
 type RouterVariables = RequestLoggerVariables & AuthVariables;
 type ParsedQuery = { ok: true; value: ListProblemsQuery } | { ok: false; fieldErrors: FieldErrors };
-type ParsedProblem = { ok: true; value: Problem } | { ok: false; fieldErrors: FieldErrors };
+export type ParsedProblem = { ok: true; value: Problem } | { ok: false; fieldErrors: FieldErrors };
 
 function present(value: string | undefined): string | undefined {
   return value !== undefined && value !== "" ? value : undefined;
@@ -82,7 +82,11 @@ function optionalString(value: unknown, field: string, errors: FieldErrors): str
 }
 
 /** Validate and normalize the complete Problem document accepted by writes. */
-function parseProblem(body: unknown, origin: Problem["origin"], routeId?: string): ParsedProblem {
+export function parseProblem(
+  body: unknown,
+  origin: Problem["origin"],
+  routeId?: string,
+): ParsedProblem {
   if (!isRecord(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };
   const errors: FieldErrors = {};
   if (!isNonEmptyString(body.id)) errors.id = ["A non-empty id is required."];

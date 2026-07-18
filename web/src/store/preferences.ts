@@ -62,7 +62,14 @@ export const usePreferences = create<PreferencesState>((set) => ({
       return;
     }
 
-    set({ ownerUserId, status: "loading" });
+    // Do not expose anonymous/local Settings while the account read is pending
+    // or failed. The synchronized server document is the sole signed-in source.
+    set({
+      ownerUserId,
+      mode: "copy",
+      distractionFree: false,
+      status: "loading",
+    });
     try {
       const { settings } = await getSettings();
       if (loadVersion !== version || settingsRevision !== revision) return;

@@ -1,4 +1,11 @@
-import type { Attempt, BestScore, Mode, Problem, Settings } from "@shared/types";
+import type {
+  Attempt,
+  BestScore,
+  LocalDataImportRequest,
+  Mode,
+  Problem,
+  Settings,
+} from "@shared/types";
 
 const SCHEMA_VERSION = 2;
 const KEY_VERSION = "ct:v";
@@ -12,6 +19,7 @@ const KEY_SETTINGS = "ct:settings";
 // neither: they live entirely in KEY_CUSTOM and are edited/removed there.
 const KEY_OVERRIDES = "ct:problems:overrides";
 const KEY_HIDDEN = "ct:problems:hidden";
+const KEY_IMPORT_TOKEN_PREFIX = "ct:import:token:";
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -203,4 +211,55 @@ export function mergedLibrary(bundled: Problem[]): Problem[] {
   const hidden = new Set(loadHidden());
   const visibleBundled = bundled.filter((p) => !hidden.has(p.id)).map((p) => overrides[p.id] ?? p);
   return [...visibleBundled, ...loadCustomProblems()];
+}
+
+export type LocalDataSnapshot = Omit<LocalDataImportRequest, "action" | "idempotencyToken">;
+
+function explicitLocalSettings(): LocalDataSnapshot["settings"] {
+  const value = read<unknown>(KEY_SETTINGS, null);
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const settings: NonNullable<LocalDataSnapshot["settings"]> = {};
+  if (record.mode === "copy" || record.mode === "recall" || record.mode === "free") {
+    settings.mode = record.mode;
+  }
+  if (typeof record.distractionFree === "boolean") {
+    settings.distractionFree = record.distractionFree;
+  }
+  return Object.keys(settings).length === 0 ? undefined : settings;
+}
+
+/**
+ * Capture only supported versioned local collections. Local Personal Best rows
+ * are intentionally absent: the server derives them from imported Attempts.
+ */
+export function localDataSnapshot(): LocalDataSnapshot {
+  const settings = explicitLocalSettings();
+  return {
+    customProblems: loadCustomProblems(),
+    overrides: Object.values(loadOverrides()),
+    tombstones: loadHidden(),
+    attempts: loadAttempts(),
+    ...(settings === undefined ? {} : { settings }),
+  };
+}
+
+export function hasEligibleLocalData(snapshot: LocalDataSnapshot): boolean {
+  return (
+    snapshot.customProblems.length > 0 ||
+    snapshot.overrides.length > 0 ||
+    snapshot.tombstones.length > 0 ||
+    snapshot.attempts.length > 0 ||
+    snapshot.settings !== undefined
+  );
+}
+
+/** Stable across retries from this browser, scoped to the signed-in account. */
+export function localDataImportToken(userId: string): string {
+  const key = `${KEY_IMPORT_TOKEN_PREFIX}${encodeURIComponent(userId)}`;
+  const existing = read<unknown>(key, null);
+  if (typeof existing === "string" && existing !== "") return existing;
+  const created = crypto.randomUUID();
+  write(key, created);
+  return created;
 }

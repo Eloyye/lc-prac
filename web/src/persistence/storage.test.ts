@@ -11,6 +11,9 @@ import {
   loadHidden,
   loadOverrides,
   loadSettings,
+  localDataImportToken,
+  localDataSnapshot,
+  hasEligibleLocalData,
   mergedLibrary,
   recentAttemptsForProblem,
   restoreBundledProblem,
@@ -165,6 +168,48 @@ describe("settings", () => {
     expect(loadSettings()).toEqual({ mode: "copy", distractionFree: false });
     saveSettings({ mode: "recall", distractionFree: true });
     expect(loadSettings()).toEqual({ mode: "recall", distractionFree: true });
+  });
+});
+
+describe("local data Import snapshot", () => {
+  it("captures every supported collection while omitting local PBs and legacy Settings", () => {
+    const custom = makeProblem("custom");
+    const override = { ...makeProblem("two-sum"), origin: "bundled" as const };
+    saveCustomProblem(custom);
+    saveOverride(override);
+    hideBundledProblem("two-sum");
+    saveAttempt(makeAttempt("attempt", custom.id, custom.solutions[0]!.id, 120));
+    localStorage.setItem(
+      "ct:settings",
+      JSON.stringify({
+        mode: "recall",
+        distractionFree: true,
+        theme: "legacy-dark",
+        smoothCaret: true,
+        paletteOpen: true,
+      }),
+    );
+    localStorage.setItem(
+      "ct:best",
+      JSON.stringify([{ problemId: custom.id, solutionId: "custom-s", bestCpm: 9999 }]),
+    );
+
+    const snapshot = localDataSnapshot();
+    expect(snapshot).toEqual({
+      customProblems: [custom],
+      overrides: [override],
+      tombstones: ["two-sum"],
+      attempts: [makeAttempt("attempt", custom.id, custom.solutions[0]!.id, 120)],
+      settings: { mode: "recall", distractionFree: true },
+    });
+    expect(snapshot).not.toHaveProperty("bestScores");
+    expect(hasEligibleLocalData(snapshot)).toBe(true);
+  });
+
+  it("keeps a stable browser token per account", () => {
+    const first = localDataImportToken("account-a");
+    expect(localDataImportToken("account-a")).toBe(first);
+    expect(localDataImportToken("account-b")).not.toBe(first);
   });
 });
 
