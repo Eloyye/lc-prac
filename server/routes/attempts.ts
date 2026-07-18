@@ -16,13 +16,13 @@ import {
 import type { FieldErrors } from "./validation";
 
 type RouterVariables = RequestLoggerVariables & AuthVariables;
-type ParsedAttempt =
+export type ParsedAttempt =
   | { ok: true; value: CreateAttemptValues }
   | { ok: false; fieldErrors: FieldErrors };
 
 const MODES = new Set<Mode>(["copy", "recall", "free"]);
 
-function parseAttempt(body: unknown): ParsedAttempt {
+export function parseAttempt(body: unknown): ParsedAttempt {
   if (!isRecord(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };
   const errors: FieldErrors = {};
   if (!isNonEmptyString(body.id)) errors.id = ["A client-generated id is required."];
@@ -90,6 +90,39 @@ function parseAttempt(body: unknown): ParsedAttempt {
       createdAtMs,
     },
   };
+}
+
+/**
+ * Normalize a versioned browser-local Attempt before applying the same strict
+ * validation as a newly completed Session. Older rows default to Copy mode and
+ * derive counters that were not persisted before the authenticated Attempt API.
+ */
+export function parseImportedAttempt(body: unknown): ParsedAttempt {
+  if (!isRecord(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };
+
+  const normalized: Record<string, unknown> = {
+    ...body,
+    mode: body.mode ?? "copy",
+  };
+  const counters = [body.totalKeystrokes, body.errorKeystrokes, body.correctChars];
+  if (counters.every((value) => value === undefined)) {
+    if (
+      isFiniteNonNegativeNumber(body.cpm) &&
+      isFiniteNonNegativeNumber(body.accuracyPct) &&
+      body.accuracyPct <= 100 &&
+      isNonNegativeInteger(body.durationMs)
+    ) {
+      const correctChars = Math.max(0, Math.round((body.cpm * body.durationMs) / 60_000));
+      const totalKeystrokes =
+        body.accuracyPct > 0
+          ? Math.max(correctChars, Math.round(correctChars / (body.accuracyPct / 100)))
+          : correctChars;
+      normalized.correctChars = correctChars;
+      normalized.totalKeystrokes = totalKeystrokes;
+      normalized.errorKeystrokes = totalKeystrokes - correctChars;
+    }
+  }
+  return parseAttempt(normalized);
 }
 
 export function createAttemptsRouter(db: Db) {

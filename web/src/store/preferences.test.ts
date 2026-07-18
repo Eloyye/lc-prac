@@ -107,4 +107,19 @@ describe("preferences ownership", () => {
       distractionFree: true,
     });
   });
+
+  it("does not expose anonymous Settings when an account read fails", async () => {
+    saveSettings({ mode: "recall", distractionFree: true });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 500 })));
+
+    await usePreferences.getState().loadForOwner("account-a");
+
+    expect(usePreferences.getState()).toMatchObject({
+      ownerUserId: "account-a",
+      mode: "copy",
+      distractionFree: false,
+      status: "error",
+    });
+    expect(loadSettings()).toEqual({ mode: "recall", distractionFree: true });
+  });
 });

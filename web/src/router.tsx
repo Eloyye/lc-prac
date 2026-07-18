@@ -25,6 +25,8 @@ import { SessionView } from "./ui/SessionView";
 import { SettingsDialog } from "./ui/SettingsDialog";
 import { Stats } from "./ui/Stats";
 import { authClient } from "./api/auth";
+import { useLocalDataImport } from "./store/local-data-import";
+import { LocalDataImportDialog } from "./ui/LocalDataImportDialog";
 
 /**
  * Search-param schema for the Library route. Defaults are encoded as "absent"
@@ -43,7 +45,30 @@ function validateLibrarySearch(search: Record<string, unknown>): LibrarySearch {
   };
 }
 
-/** Always-mounted shell; stamps the storage schema and hydrates the Library. */
+async function hydrateForOwner(userId: string | null): Promise<void> {
+  // Never leave anonymous/local Library rows visible while an authenticated
+  // reload is in progress or has failed; signed-in data has one authority.
+  useLibrary.setState({
+    problems: [],
+    bundled: [],
+    custom: [],
+    hiddenProblems: [],
+    overriddenProblemIds: [],
+    authenticated: userId !== null,
+    archived: [],
+    status: "idle",
+    error: null,
+    actionError: null,
+  });
+  useHistory.getState().reset(userId);
+  await Promise.allSettled([
+    useLibrary.getState().load(),
+    userId === null ? Promise.resolve() : useHistory.getState().ensureLoaded(),
+    usePreferences.getState().loadForOwner(userId),
+  ]);
+}
+
+/** Always-mounted shell; stamps storage and coordinates account authority. */
 function RootLayout() {
   const { data: session, isPending } = authClient.useSession();
   const userId = session?.user.id ?? null;
@@ -52,18 +77,29 @@ function RootLayout() {
   }, []);
   useEffect(() => {
     if (isPending) return;
-    // Session identity changes switch the authoritative custom Problem set.
-    useLibrary.setState({ status: "idle" });
-    void useLibrary.getState().ensureLoaded();
-    useHistory.getState().reset(userId);
-    if (userId !== null) void useHistory.getState().ensureLoaded();
-    void usePreferences.getState().loadForOwner(userId);
+    if (userId === null) {
+      useLocalDataImport.getState().reset();
+      void hydrateForOwner(null);
+      return;
+    }
+
+    // Settings hydration waits for an eligible browser's explicit decision so
+    // a default server row cannot silently win before the Import is offered.
+    void useLocalDataImport
+      .getState()
+      .check(userId)
+      .then((requiresDialog) => {
+        if (!requiresDialog && useLocalDataImport.getState().ownerUserId === userId) {
+          void hydrateForOwner(userId);
+        }
+      });
   }, [isPending, userId]);
   return (
     <>
       <Outlet />
       <CommandPalette />
       <SettingsDialog />
+      <LocalDataImportDialog onResolved={() => hydrateForOwner(userId)} />
     </>
   );
 }

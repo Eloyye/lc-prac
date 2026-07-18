@@ -265,6 +265,21 @@ export const userSettings = sqliteTable("user_settings", {
   updatedAtMs: integer("updated_at_ms").notNull(),
 });
 
+/**
+ * One explicit local-data decision per account. The report is stored with the
+ * idempotency token so a browser retry receives the original result without
+ * repeating any writes or derived Personal Best updates.
+ */
+export const localDataImports = sqliteTable("local_data_imports", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  idempotencyToken: text("idempotency_token").notNull(),
+  decision: text("decision", { enum: ["imported", "skipped"] }).notNull(),
+  reportJson: text("report_json").notNull(),
+  completedAtMs: integer("completed_at_ms").notNull(),
+});
+
 export type ProblemRow = typeof problems.$inferSelect;
 export type SolutionRow = typeof solutions.$inferSelect;
 export type ProblemExampleRow = typeof problemExamples.$inferSelect;
@@ -272,3 +287,4 @@ export type TagRow = typeof tags.$inferSelect;
 export type AttemptRow = typeof attempts.$inferSelect;
 export type BestScoreRow = typeof bestScores.$inferSelect;
 export type UserSettingsRow = typeof userSettings.$inferSelect;
+export type LocalDataImportRow = typeof localDataImports.$inferSelect;
