@@ -17,6 +17,7 @@ import { nextPracticeTarget } from "@shared/content/next";
 import { initStorage } from "./persistence/storage";
 import { resolveProblem, resolveSession, useLibrary } from "./store/library";
 import { useHistory } from "./store/history";
+import { usePreferences } from "./store/preferences";
 import { Library } from "./ui/Library";
 import { CommandPalette } from "./ui/CommandPalette";
 import { ProblemDetail } from "./ui/ProblemDetail";
@@ -56,6 +57,7 @@ function RootLayout() {
     void useLibrary.getState().ensureLoaded();
     useHistory.getState().reset(userId);
     if (userId !== null) void useHistory.getState().ensureLoaded();
+    void usePreferences.getState().loadForOwner(userId);
   }, [isPending, userId]);
   return (
     <>
