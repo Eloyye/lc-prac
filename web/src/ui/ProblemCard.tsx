@@ -1,18 +1,20 @@
 import { Link } from "@tanstack/react-router";
-import type { Problem } from "@shared/types";
-import { bestFor } from "../persistence/storage";
+import type { Mode, Problem, SavedBestScore } from "@shared/types";
 import type { LibrarySearch } from "@shared/content/filter";
+import { bestFor } from "../store/history";
 import { DIFFICULTY_COLOR } from "./difficulty";
 
 interface ProblemCardProps {
   problem: Problem;
   search: LibrarySearch;
+  bestScores: SavedBestScore[];
+  mode: Mode;
   onArchive: (problem: Problem) => void;
 }
 
-export function ProblemCard({ problem, search, onArchive }: ProblemCardProps) {
+export function ProblemCard({ problem, search, bestScores, mode, onArchive }: ProblemCardProps) {
   const bestCpms = problem.solutions
-    .map((s) => bestFor(problem.id, s.id)?.bestCpm)
+    .map((s) => bestFor(bestScores, problem.id, s.id, mode)?.bestCpm)
     .filter((v): v is number => v !== undefined);
   const bestCpm = bestCpms.length > 0 ? Math.max(...bestCpms) : null;
   const count = problem.solutions.length;
@@ -39,7 +41,9 @@ export function ProblemCard({ problem, search, onArchive }: ProblemCardProps) {
               <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-neutral-400">Custom</span>
             )}
             {bestCpm !== null && (
-              <span className="text-neutral-500">PB {Math.round(bestCpm)} CPM</span>
+              <span className="text-neutral-500">
+                {mode[0]!.toUpperCase() + mode.slice(1)} PB {Math.round(bestCpm)} CPM
+              </span>
             )}
           </div>
         </div>

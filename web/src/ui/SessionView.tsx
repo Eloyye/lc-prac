@@ -3,6 +3,7 @@ import type { Problem, Solution } from "@shared/types";
 import { computeMetrics } from "../typing-engine";
 import { createAttempt } from "../api/attempts";
 import { useSession } from "../store/session";
+import { useHistory } from "../store/history";
 import { usePreferences } from "../store/preferences";
 import { ReferenceEditor } from "../editor/ReferenceEditor";
 import { TypingEditor } from "../editor/TypingEditor";
@@ -84,6 +85,7 @@ export function SessionView({ problem, solution, onExit, onNext }: SessionViewPr
       elapsedMs: durationMs,
     });
     const attemptId = crypto.randomUUID();
+    const historyOwnerUserId = useHistory.getState().ownerUserId;
     completedAttemptId.current = attemptId;
     setSaveState({ status: "saving" });
     void createAttempt({
@@ -102,6 +104,7 @@ export function SessionView({ problem, solution, onExit, onNext }: SessionViewPr
     })
       .then((response) => {
         if (completedAttemptId.current !== attemptId) return;
+        useHistory.getState().recordBestScore(response.bestScore, historyOwnerUserId);
         setSaveState({
           status: "saved",
           bestCpm: response.bestScore.bestCpm,

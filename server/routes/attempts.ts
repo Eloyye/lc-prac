@@ -4,8 +4,9 @@ import type { Db } from "../db/client";
 import type { RequestLoggerVariables } from "../middleware/request-logger";
 import { requireUser } from "../middleware/session";
 import type { AuthVariables } from "../middleware/session";
-import { createAttempt } from "../services/attempts";
+import { createAttempt, listAttempts } from "../services/attempts";
 import type { CreateAttemptValues } from "../services/attempts";
+import { parseHistoryQuery } from "./history-query";
 import {
   isFiniteNonNegativeNumber,
   isNonEmptyString,
@@ -93,6 +94,26 @@ function parseAttempt(body: unknown): ParsedAttempt {
 
 export function createAttemptsRouter(db: Db) {
   const router = new Hono<{ Variables: RouterVariables }>();
+
+  router.get("/", requireUser, (c) => {
+    const parsed = parseHistoryQuery(c.req.query(), { allowLimit: true });
+    if (!parsed.ok) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION",
+            message: "Invalid history filters.",
+            requestId: c.var.requestId,
+            fieldErrors: parsed.fieldErrors,
+          },
+        },
+        400,
+      );
+    }
+    return c.json({
+      attempts: listAttempts(db, c.var.user!.id, parsed.filters, parsed.limit),
+    });
+  });
 
   router.post("/", requireUser, async (c) => {
     const parsed = parseAttempt(await c.req.json().catch(() => null));
