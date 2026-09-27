@@ -23,12 +23,16 @@ Whether a Problem ships with the app (**bundled**) or was added by the user (**c
 _Avoid_: source, curated, built-in
 
 **Library**:
-The full set of practiceable Problems: bundled Problems merged with the user's custom ones.
+The user's effective set of practiceable Problems: bundled Problems with that user's Overrides applied and Tombstoned ones hidden, plus the user's active (non-archived) custom Problems. Anonymous users get the bundled Problems personalized by browser-local Overrides and Tombstones only.
 _Avoid_: catalog, collection, problem set
 
 **Import**:
-The act of adding a custom Problem by pasting your own code; the result is a custom Problem stored locally.
+The act of adding a custom Problem by pasting your own code; the result is a custom Problem saved to the user's account (requires sign-in). Not to be confused with **Local data import**.
 _Avoid_: upload
+
+**Archive**:
+Removing a **custom** Problem from the active Library while keeping it, and its Attempts and Personal Bests, restorable. Only an archived custom Problem can be **permanently deleted**, which also purges its history. Bundled Problems are hidden with a Tombstone instead.
+_Avoid_: delete (for the reversible action)
 
 **Override**:
 A user's edit of a **bundled** Problem, stored as a private full-Problem copy that shadows the shipped one in the Library (the shipped Problem is global and can't be mutated per user). Reversible: **Reset** drops only the Override and restores the current shipped version. Signed-in Overrides are server-backed; anonymous Overrides remain browser-local. Custom Problems have no Override — they are edited in place.
@@ -45,15 +49,15 @@ One live practice run of a single Solution — the transient state from first ke
 _Avoid_: run, game
 
 **Mode**:
-How a Session reveals the Reference. **Copy** — Reference always fully visible — is the only Mode implemented today; the code currently hardcodes every Attempt to it. **Recall** (progressively hidden, for memorization) and **Free** (hidden; solve it yourself) are planned but unbuilt, like spaced repetition and Cloze.
+How a Session reveals the Reference, chosen in Settings and recorded on every Attempt. **Copy** — Reference always fully visible. **Recall** (progressively hidden, for memorization) and **Free** (hidden; solve it yourself) are selectable, but today both simply hide the Reference; progressive reveal, spaced repetition, and Cloze are unbuilt.
 _Avoid_: practice type; for Free, "Solve"
 
 **Attempt**:
-The saved record of one _completed_ Session — its mode, cpm, wpm, accuracy, duration, timestamp, and the Problem/Solution it covered. An immutable historical fact: it captures the Reference as it was when typed, so editing or deleting that Solution later never rewrites or re-points it. The unit of history; an abandoned Session records nothing.
+The saved record of one _completed_ Session — its mode, cpm, wpm, accuracy, duration, keystroke counts, timestamp, and the Problem/Solution it covered. An immutable historical fact: it snapshots the Problem title and Solution approach at typing time, so editing, hiding, or archiving that Problem later never rewrites it. The unit of history; an abandoned Session records nothing, and only signed-in users' Attempts are saved.
 _Avoid_: result, score
 
 **Personal Best (PB)**:
-The best cpm for a given Problem + Solution **in a given Mode**, derived from Attempts. Copy and Recall PBs are tracked separately and are never compared.
+The best cpm for a given Problem + Solution **in a given Mode**, derived from Attempts and updated in the same transaction that saves each Attempt. PBs for different Modes are tracked separately and are never compared.
 _Avoid_: high score, record
 
 ### Typing & scoring
@@ -76,3 +80,13 @@ _Avoid_: character accuracy (the final-state ratio; not what we report)
 **Auto-indent**:
 The editor pre-inserts each line's leading whitespace so the user types only meaningful characters, never Python indentation.
 _Avoid_: auto-format
+
+### Accounts
+
+**Settings**:
+The user's synchronized preferences — currently only the default Mode and distraction-free. Signed-in Settings live on the account and follow the user across devices; anonymous Settings stay in the browser. Transient UI state (open dialogs, the command palette) is not a Setting.
+_Avoid_: preferences (in product language), config
+
+**Local data import**:
+The one-time, user-confirmed transfer of browser-local data (custom Problems, Overrides, Tombstones, Attempts, Settings) into an account after sign-in. The user either imports or skips; the decision is recorded once per account, existing account data wins on conflict, and Personal Bests are recomputed from the imported Attempts.
+_Avoid_: sync, migration

@@ -9,7 +9,7 @@ import { DIFFICULTIES, ORIGINS } from "../../shared/domain/problem";
  * The columns reserved for custom ownership (`ownerUserId`, `archivedAtMs`)
  * stay null for bundled rows.
  *
- * See docs/BACKEND_INTEGRATION_SPEC.md §8 for the full target schema.
+ * See docs/TECH_SPEC.md §10 for table invariants.
  */
 
 export const user = sqliteTable("user", {
