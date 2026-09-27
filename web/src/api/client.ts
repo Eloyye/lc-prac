@@ -4,19 +4,24 @@
  * Same-origin in production; Vite proxies `/api` to the Hono server in dev.
  */
 
+import { DecodeError } from "@shared/api/decode";
+import type { Decoder } from "@shared/api/decode";
 import type { ApiErrorResponse } from "@shared/api/errors";
 
 const API_BASE = "/api";
 
-/** A failed API call: a non-2xx response or an unreachable server. */
+/**
+ * A failed API call: a non-2xx response, an unreachable server, or a 2xx body
+ * that does not match its endpoint contract (`INVALID_RESPONSE`).
+ */
 export class ApiError extends Error {
   /** HTTP status, or 0 when the request never reached the server. */
   readonly status: number;
   /** Server error code (e.g. `NOT_FOUND`, `VALIDATION`), or a synthetic one. */
   readonly code: string;
 
-  constructor(status: number, code: string, message: string) {
-    super(message);
+  constructor(status: number, code: string, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
@@ -41,7 +46,13 @@ function buildUrl(path: string, params?: QueryParams): string {
 /** A failure body is untrusted: any part of the shared envelope may be missing. */
 type ApiErrorBody = { error?: Partial<ApiErrorResponse["error"]> };
 
-async function parseResponse<T>(response: Response): Promise<T> {
+function invalidResponse(status: number, cause: unknown): ApiError {
+  return new ApiError(status, "INVALID_RESPONSE", "The server sent an unexpected response.", {
+    cause,
+  });
+}
+
+async function parseResponse<T>(response: Response, decode: Decoder<T>): Promise<T> {
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as ApiErrorBody | null;
     throw new ApiError(
@@ -50,8 +61,20 @@ async function parseResponse<T>(response: Response): Promise<T> {
       body?.error?.message ?? `Request failed with status ${response.status}.`,
     );
   }
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  let body: unknown;
+  if (response.status !== 204) {
+    try {
+      body = await response.json();
+    } catch (cause) {
+      throw invalidResponse(response.status, cause);
+    }
+  }
+  try {
+    return decode(body);
+  } catch (cause) {
+    if (cause instanceof DecodeError) throw invalidResponse(response.status, cause);
+    throw cause;
+  }
 }
 
 async function request(path: string, init: RequestInit): Promise<Response> {
@@ -67,18 +90,23 @@ async function request(path: string, init: RequestInit): Promise<Response> {
   return response;
 }
 
-/** GET `path` and parse a JSON body, mapping failures to `ApiError`. */
-export async function apiGet<T>(path: string, params?: QueryParams): Promise<T> {
+/** GET `path` and decode its JSON body, mapping failures to `ApiError`. */
+export async function apiGet<T>(
+  path: string,
+  decode: Decoder<T>,
+  params?: QueryParams,
+): Promise<T> {
   const response = await request(buildUrl(path, params), {
     headers: { Accept: "application/json" },
   });
-  return parseResponse<T>(response);
+  return parseResponse(response, decode);
 }
 
-/** Send a JSON mutation and parse its JSON response (or `undefined` for 204). */
+/** Send a JSON mutation and decode its response (use `noContent` for 204). */
 export async function apiJson<T>(
   method: "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
+  decode: Decoder<T>,
   body?: unknown,
 ): Promise<T> {
   const response = await request(buildUrl(path), {
@@ -89,5 +117,5 @@ export async function apiJson<T>(
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
-  return parseResponse<T>(response);
+  return parseResponse(response, decode);
 }

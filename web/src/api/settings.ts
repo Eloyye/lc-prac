@@ -1,10 +1,12 @@
-import type { Settings, SettingsResponse } from "@shared/types";
+import { decodeSettingsResponse } from "@shared/api/settings";
+import type { SettingsResponse } from "@shared/api/settings";
+import type { Settings } from "@shared/domain/settings";
 import { apiGet, apiJson } from "./client";
 
 export function getSettings(): Promise<SettingsResponse> {
-  return apiGet<SettingsResponse>("/settings");
+  return apiGet("/settings", decodeSettingsResponse);
 }
 
 export function replaceSettings(settings: Settings): Promise<SettingsResponse> {
-  return apiJson<SettingsResponse>("PUT", "/settings", settings);
+  return apiJson("PUT", "/settings", decodeSettingsResponse, settings);
 }

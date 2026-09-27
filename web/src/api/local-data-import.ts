@@ -1,21 +1,25 @@
+import {
+  decodeLocalDataImportResponse,
+  decodeLocalDataImportStatusResponse,
+} from "@shared/api/local-data-import";
 import type {
   LocalDataImportRequest,
   LocalDataImportResponse,
   LocalDataImportStatusResponse,
   LocalDataSkipRequest,
-} from "@shared/types";
+} from "@shared/api/local-data-import";
 import { apiGet, apiJson } from "./client";
 
 export function getLocalDataImportStatus(): Promise<LocalDataImportStatusResponse> {
-  return apiGet<LocalDataImportStatusResponse>("/local-data-import");
+  return apiGet("/local-data-import", decodeLocalDataImportStatusResponse);
 }
 
 export function importLocalData(request: LocalDataImportRequest): Promise<LocalDataImportResponse> {
-  return apiJson<LocalDataImportResponse>("POST", "/local-data-import", request);
+  return apiJson("POST", "/local-data-import", decodeLocalDataImportResponse, request);
 }
 
 export function skipLocalDataImport(
   request: LocalDataSkipRequest,
 ): Promise<LocalDataImportResponse> {
-  return apiJson<LocalDataImportResponse>("POST", "/local-data-import", request);
+  return apiJson("POST", "/local-data-import", decodeLocalDataImportResponse, request);
 }

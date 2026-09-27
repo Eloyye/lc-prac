@@ -2,6 +2,8 @@ import type { Attempt } from "../domain/attempt";
 import type { Mode } from "../domain/mode";
 import type { Problem } from "../domain/problem";
 import type { Settings } from "../domain/settings";
+import { array, boolean, literal, number, object, string } from "./decode";
+import type { Decoder } from "./decode";
 
 /** Browser-local collections supported by the one-time account Import. */
 export type LocalDataCollection =
@@ -57,3 +59,45 @@ export interface LocalDataImportResponse {
   report: LocalDataImportReport;
   replayed: boolean;
 }
+
+const decodeCollection = literal<LocalDataCollection>(
+  "customProblems",
+  "overrides",
+  "tombstones",
+  "attempts",
+  "settings",
+);
+
+const decodeReport: Decoder<LocalDataImportReport> = object({
+  decision: literal("imported", "skipped"),
+  imported: object({
+    customProblems: number,
+    overrides: number,
+    tombstones: number,
+    attempts: number,
+    settings: number,
+  }),
+  skipped: array(
+    object({
+      collection: decodeCollection,
+      id: string,
+      reason: literal("conflict", "invalid", "unavailable"),
+    }),
+  ),
+  completedAt: string,
+});
+
+export const decodeLocalDataImportStatusResponse: Decoder<LocalDataImportStatusResponse> = (
+  value,
+  path = "",
+) => {
+  const { status } = object({ status: literal("pending", "complete") })(value, path);
+  return status === "pending"
+    ? (value as LocalDataImportStatusResponse)
+    : object({ status: literal("complete"), report: decodeReport })(value, path);
+};
+
+export const decodeLocalDataImportResponse: Decoder<LocalDataImportResponse> = object({
+  report: decodeReport,
+  replayed: boolean,
+});
