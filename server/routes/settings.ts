@@ -1,5 +1,7 @@
 import { Hono } from "hono";
-import type { Mode, Settings } from "../../shared/types";
+import { isMode, MODES } from "../../shared/domain/mode";
+import type { Mode } from "../../shared/domain/mode";
+import type { Settings } from "../../shared/domain/settings";
 import type { Db } from "../db/client";
 import type { RequestLoggerVariables } from "../middleware/request-logger";
 import { requireUser } from "../middleware/session";
@@ -11,15 +13,14 @@ import type { FieldErrors } from "./validation";
 type RouterVariables = RequestLoggerVariables & AuthVariables;
 type ParsedSettings = { ok: true; value: Settings } | { ok: false; fieldErrors: FieldErrors };
 
-const MODES = new Set<Mode>(["copy", "recall", "free"]);
 const SETTINGS_FIELDS = new Set(["mode", "distractionFree"]);
 
 function parseSettings(body: unknown): ParsedSettings {
   if (!isRecord(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };
 
   const fieldErrors: FieldErrors = {};
-  if (typeof body.mode !== "string" || !MODES.has(body.mode as Mode)) {
-    fieldErrors.mode = ["Must be one of copy, recall, free."];
+  if (!isMode(body.mode)) {
+    fieldErrors.mode = [`Must be one of ${MODES.join(", ")}.`];
   }
   if (typeof body.distractionFree !== "boolean") {
     fieldErrors.distractionFree = ["Must be a boolean."];

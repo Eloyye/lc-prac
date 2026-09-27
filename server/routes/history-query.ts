@@ -1,7 +1,6 @@
-import type { HistoryFilters, Mode } from "../../shared/types";
+import type { HistoryFilters } from "../../shared/api/history";
+import { isMode, MODES } from "../../shared/domain/mode";
 import type { FieldErrors } from "./validation";
-
-const MODES = new Set<Mode>(["copy", "recall", "free"]);
 
 export type ParsedHistoryQuery =
   | { ok: true; filters: HistoryFilters; limit?: number }
@@ -24,10 +23,10 @@ export function parseHistoryQuery(
   }
 
   if (query.mode !== undefined) {
-    if (!MODES.has(query.mode as Mode)) {
-      fieldErrors.mode = ["Must be one of copy, recall, free."];
+    if (!isMode(query.mode)) {
+      fieldErrors.mode = [`Must be one of ${MODES.join(", ")}.`];
     } else {
-      filters.mode = query.mode as Mode;
+      filters.mode = query.mode;
     }
   }
 

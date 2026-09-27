@@ -1,5 +1,12 @@
 import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
-import type { Example, Problem, Solution } from "../../shared/types";
+import type {
+  Difficulty,
+  Example,
+  Origin,
+  Problem,
+  ProblemStatus,
+  Solution,
+} from "../../shared/domain/problem";
 import { filterProblems } from "../../shared/content/filter";
 import type { Db } from "../db/client";
 import {
@@ -17,10 +24,10 @@ import type { ProblemExampleRow, ProblemRow, SolutionRow } from "../db/schema";
 
 export type ListProblemsQuery = {
   q?: string;
-  difficulty?: "easy" | "medium" | "hard";
+  difficulty?: Difficulty;
   tag?: string;
-  origin?: "bundled" | "custom";
-  status?: "active" | "archived";
+  origin?: Origin;
+  status?: ProblemStatus;
   limit?: number;
   cursor?: string;
 };
@@ -175,7 +182,7 @@ function loadPersonalization(
 function loadOwnedCustomRows(
   db: Db,
   userId: string | undefined,
-  status: "active" | "archived",
+  status: ProblemStatus,
 ): ProblemRow[] {
   if (userId === undefined) return [];
   return db

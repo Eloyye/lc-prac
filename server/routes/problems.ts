@@ -1,6 +1,14 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
-import type { Problem } from "../../shared/types";
+import {
+  DIFFICULTIES,
+  isDifficulty,
+  isOrigin,
+  isProblemStatus,
+  ORIGINS,
+  PROBLEM_STATUSES,
+} from "../../shared/domain/problem";
+import type { Problem } from "../../shared/domain/problem";
 import type { Db } from "../db/client";
 import type { RequestLoggerVariables } from "../middleware/request-logger";
 import { requireUser } from "../middleware/session";
@@ -23,10 +31,6 @@ import type { CustomProblemMutationResult, ListProblemsQuery } from "../services
 import { isNonEmptyString, isRecord } from "./validation";
 import type { FieldErrors } from "./validation";
 
-const DIFFICULTIES = new Set(["easy", "medium", "hard"]);
-const ORIGINS = new Set(["bundled", "custom"]);
-const STATUSES = new Set(["active", "archived"]);
-
 type RouterVariables = RequestLoggerVariables & AuthVariables;
 type ParsedQuery = { ok: true; value: ListProblemsQuery } | { ok: false; fieldErrors: FieldErrors };
 export type ParsedProblem = { ok: true; value: Problem } | { ok: false; fieldErrors: FieldErrors };
@@ -47,19 +51,18 @@ function parseListQuery(raw: Record<string, string>): ParsedQuery {
 
   const difficulty = present(raw.difficulty);
   if (difficulty !== undefined) {
-    if (DIFFICULTIES.has(difficulty))
-      value.difficulty = difficulty as ListProblemsQuery["difficulty"];
-    else fieldErrors.difficulty = ["Must be one of easy, medium, hard."];
+    if (isDifficulty(difficulty)) value.difficulty = difficulty;
+    else fieldErrors.difficulty = [`Must be one of ${DIFFICULTIES.join(", ")}.`];
   }
   const origin = present(raw.origin);
   if (origin !== undefined) {
-    if (ORIGINS.has(origin)) value.origin = origin as ListProblemsQuery["origin"];
-    else fieldErrors.origin = ["Must be one of bundled, custom."];
+    if (isOrigin(origin)) value.origin = origin;
+    else fieldErrors.origin = [`Must be one of ${ORIGINS.join(", ")}.`];
   }
   const status = present(raw.status);
   if (status !== undefined) {
-    if (STATUSES.has(status)) value.status = status as ListProblemsQuery["status"];
-    else fieldErrors.status = ["Must be one of active, archived."];
+    if (isProblemStatus(status)) value.status = status;
+    else fieldErrors.status = [`Must be one of ${PROBLEM_STATUSES.join(", ")}.`];
   }
   const limit = present(raw.limit);
   if (limit !== undefined) {
@@ -92,8 +95,8 @@ export function parseProblem(
   if (!isNonEmptyString(body.id)) errors.id = ["A non-empty id is required."];
   else if (routeId !== undefined && body.id !== routeId) errors.id = ["Must match the route id."];
   if (!isNonEmptyString(body.title)) errors.title = ["A non-empty title is required."];
-  if (typeof body.difficulty !== "string" || !DIFFICULTIES.has(body.difficulty)) {
-    errors.difficulty = ["Must be one of easy, medium, hard."];
+  if (!isDifficulty(body.difficulty)) {
+    errors.difficulty = [`Must be one of ${DIFFICULTIES.join(", ")}.`];
   }
   if (body.origin !== origin) errors.origin = [`Must remain ${origin}.`];
 

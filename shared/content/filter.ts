@@ -1,6 +1,6 @@
-import type { Problem } from "../types";
+import type { Difficulty, Problem } from "../domain/problem";
 
-export type DifficultyFilter = "all" | "easy" | "medium" | "hard";
+export type DifficultyFilter = "all" | Difficulty;
 
 export interface LibrarySearch {
   q?: string;

@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { MODES } from "../../shared/domain/mode";
+import { DIFFICULTIES, ORIGINS } from "../../shared/domain/problem";
 
 /**
  * Database schema for Better Auth and the Problem Library. Per-user bundled
@@ -98,8 +100,8 @@ export const problems = sqliteTable(
     id: text("id").primaryKey(),
     slug: text("slug").unique(),
     title: text("title").notNull(),
-    difficulty: text("difficulty", { enum: ["easy", "medium", "hard"] }).notNull(),
-    origin: text("origin", { enum: ["bundled", "custom"] }).notNull(),
+    difficulty: text("difficulty", { enum: DIFFICULTIES }).notNull(),
+    origin: text("origin", { enum: ORIGINS }).notNull(),
     // Null for bundled rows; custom rows carry the owning account id.
     ownerUserId: text("owner_user_id"),
     url: text("url"),
@@ -213,7 +215,7 @@ export const attempts = sqliteTable(
     solutionId: text("solution_id").notNull(),
     problemTitle: text("problem_title").notNull(),
     solutionApproach: text("solution_approach").notNull(),
-    mode: text("mode", { enum: ["copy", "recall", "free"] }).notNull(),
+    mode: text("mode", { enum: MODES }).notNull(),
     cpm: real("cpm").notNull(),
     wpm: real("wpm").notNull(),
     accuracyPct: real("accuracy_pct").notNull(),
@@ -241,7 +243,7 @@ export const bestScores = sqliteTable(
       .notNull()
       .references(() => problems.id),
     solutionId: text("solution_id").notNull(),
-    mode: text("mode", { enum: ["copy", "recall", "free"] }).notNull(),
+    mode: text("mode", { enum: MODES }).notNull(),
     bestCpm: real("best_cpm").notNull(),
     bestAccuracyPct: real("best_accuracy_pct").notNull(),
     bestDurationMs: integer("best_duration_ms").notNull(),
@@ -260,7 +262,7 @@ export const userSettings = sqliteTable("user_settings", {
   userId: text("user_id")
     .primaryKey()
     .references(() => user.id, { onDelete: "cascade" }),
-  mode: text("mode", { enum: ["copy", "recall", "free"] }).notNull(),
+  mode: text("mode", { enum: MODES }).notNull(),
   distractionFree: integer("distraction_free", { mode: "boolean" }).notNull(),
   updatedAtMs: integer("updated_at_ms").notNull(),
 });

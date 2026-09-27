@@ -1,4 +1,4 @@
-import type { Problem } from "@shared/types";
+import type { Difficulty, Origin, Problem, ProblemStatus } from "@shared/domain/problem";
 import { apiGet, apiJson } from "./client";
 
 export type ProblemPersonalization = {
@@ -14,10 +14,10 @@ export type ProblemListResponse = {
 
 export type ProblemListParams = {
   q?: string;
-  difficulty?: "easy" | "medium" | "hard";
+  difficulty?: Difficulty;
   tag?: string;
-  origin?: "bundled" | "custom";
-  status?: "active" | "archived";
+  origin?: Origin;
+  status?: ProblemStatus;
   limit?: number;
   cursor?: string;
 };

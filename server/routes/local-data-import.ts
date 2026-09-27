@@ -1,5 +1,9 @@
 import { Hono } from "hono";
-import type { LocalDataImportSkippedRecord, LocalSettingsImport, Mode } from "../../shared/types";
+import type {
+  LocalDataImportSkippedRecord,
+  LocalSettingsImport,
+} from "../../shared/api/local-data-import";
+import { isMode } from "../../shared/domain/mode";
 import type { Db } from "../db/client";
 import type { RequestLoggerVariables } from "../middleware/request-logger";
 import { requireUser } from "../middleware/session";
@@ -26,8 +30,6 @@ type ParsedRequest =
     }
   | { ok: false; fieldErrors: FieldErrors };
 
-const MODES = new Set<Mode>(["copy", "recall", "free"]);
-
 function recordId(value: unknown, index: number): string {
   return isRecord(value) && isNonEmptyString(value.id) ? value.id.trim() : `#${index + 1}`;
 }
@@ -46,10 +48,8 @@ function parseSettings(value: unknown): {
   if (!isRecord(value)) return { skipped: invalidRecord("settings", "current") };
   const settings: LocalSettingsImport = {};
   if (value.mode !== undefined) {
-    if (typeof value.mode !== "string" || !MODES.has(value.mode as Mode)) {
-      return { skipped: invalidRecord("settings", "current") };
-    }
-    settings.mode = value.mode as Mode;
+    if (!isMode(value.mode)) return { skipped: invalidRecord("settings", "current") };
+    settings.mode = value.mode;
   }
   if (value.distractionFree !== undefined) {
     if (typeof value.distractionFree !== "boolean") {

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import type { Mode } from "../../shared/types";
+import { isMode, MODES } from "../../shared/domain/mode";
+import type { Mode } from "../../shared/domain/mode";
 import type { Db } from "../db/client";
 import type { RequestLoggerVariables } from "../middleware/request-logger";
 import { requireUser } from "../middleware/session";
@@ -20,16 +21,14 @@ export type ParsedAttempt =
   | { ok: true; value: CreateAttemptValues }
   | { ok: false; fieldErrors: FieldErrors };
 
-const MODES = new Set<Mode>(["copy", "recall", "free"]);
-
 export function parseAttempt(body: unknown): ParsedAttempt {
   if (!isRecord(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };
   const errors: FieldErrors = {};
   if (!isNonEmptyString(body.id)) errors.id = ["A client-generated id is required."];
   if (!isNonEmptyString(body.problemId)) errors.problemId = ["A Problem id is required."];
   if (!isNonEmptyString(body.solutionId)) errors.solutionId = ["A Solution id is required."];
-  if (typeof body.mode !== "string" || !MODES.has(body.mode as Mode)) {
-    errors.mode = ["Must be one of copy, recall, free."];
+  if (!isMode(body.mode)) {
+    errors.mode = [`Must be one of ${MODES.join(", ")}.`];
   }
 
   for (const field of ["cpm", "wpm", "accuracyPct"] as const) {

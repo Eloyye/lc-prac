@@ -1,5 +1,32 @@
 export type Lang = "python";
 
+export const DIFFICULTIES = ["easy", "medium", "hard"] as const;
+export type Difficulty = (typeof DIFFICULTIES)[number];
+
+/** Whether a Problem ships with the app or was added by the user. */
+export const ORIGINS = ["bundled", "custom"] as const;
+export type Origin = (typeof ORIGINS)[number];
+
+/** Whether a custom Problem is in the active Library or archived. */
+export const PROBLEM_STATUSES = ["active", "archived"] as const;
+export type ProblemStatus = (typeof PROBLEM_STATUSES)[number];
+
+function isOneOf<T extends string>(values: readonly T[], value: unknown): value is T {
+  return typeof value === "string" && (values as readonly string[]).includes(value);
+}
+
+export function isDifficulty(value: unknown): value is Difficulty {
+  return isOneOf(DIFFICULTIES, value);
+}
+
+export function isOrigin(value: unknown): value is Origin {
+  return isOneOf(ORIGINS, value);
+}
+
+export function isProblemStatus(value: unknown): value is ProblemStatus {
+  return isOneOf(PROBLEM_STATUSES, value);
+}
+
 export interface Solution {
   id: string;
   lang: Lang;
@@ -24,10 +51,10 @@ export interface Example {
 export interface Problem {
   id: string;
   title: string;
-  difficulty: "easy" | "medium" | "hard";
+  difficulty: Difficulty;
   tags: string[];
   url?: string;
-  origin: "bundled" | "custom";
+  origin: Origin;
   // The fields below are optional content surfaces. They target custom / own /
   // openly-licensed Problems — bundled LeetCode Problems leave them unset and
   // keep linking out via `url` (see PRD §12 licensing), so every consumer must
