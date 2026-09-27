@@ -1,5 +1,34 @@
 @import "tailwindcss";
 
+/* "Scoreboard" design tokens. Lemon only ever means "your score" (live CPM,
+   Personal Bests); pink is the action/caret color; mint/lemon/tomato encode
+   difficulty. Keep hex values in sync with the Monaco theme in editor/monaco.ts. */
+@theme {
+  --color-cobalt-950: #0f1250;
+  --color-cobalt-900: #141865;
+  --color-cobalt-850: #1a1e78;
+  --color-cobalt-800: #1e2385;
+  --color-cobalt-700: #262b92;
+  --color-cobalt-600: #3a40b0;
+  --color-cobalt-400: #7f7ec4;
+  --color-cobalt-300: #a9a8e0;
+  --color-cobalt-200: #c9c8f5;
+  --color-paper: #f2f0ff;
+  --color-pink: #ff3d8b;
+  --color-pink-light: #ff6ea6;
+  --color-pink-ink: #2a0616;
+  --color-lemon: #ffe14d;
+  --color-lemon-ink: #4a3b00;
+  --color-mint: #2ee6a6;
+  --color-mint-ink: #063b2a;
+  --color-tomato: #ff5a3c;
+  --color-tomato-ink: #4a0f05;
+
+  --font-display: "Big Shoulders Display", "Arial Narrow", sans-serif;
+  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 :root {
   color-scheme: dark;
 }
@@ -12,16 +41,59 @@ body,
 
 body {
   margin: 0;
+  background: var(--color-cobalt-900);
+  color: var(--color-paper);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-lemon);
+  outline-offset: 2px;
 }
 
 /* Typing feedback (Monaco inlineClassName targets). Correct characters keep
    their syntax-highlight color; only mistakes are flagged — color plus an
    underline so the signal is not color-only (a11y). */
 .tok-incorrect {
-  color: #f87171 !important;
+  color: #ffb3a3 !important;
   text-decoration: underline;
-  text-decoration-color: #ef4444;
-  background: rgba(239, 68, 68, 0.15);
+  text-decoration-color: var(--color-tomato);
+  background: rgb(255 90 60 / 33%);
+}
+
+/* Results reveal: the one orchestrated motion moment on the page. */
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: rotate(-12deg) scale(1.8);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(9deg) scale(1);
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}
+
+.results-card {
+  animation: card-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.results-stamp {
+  transform: rotate(9deg);
+  animation: stamp-in 320ms 180ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .results-card,
+  .results-stamp {
+    animation: none;
+  }
 }
 
 .command-overlay {

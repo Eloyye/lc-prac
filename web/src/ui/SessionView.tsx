@@ -61,7 +61,9 @@ export function SessionView({ problem, solution, onExit, onNext }: SessionViewPr
     return () => window.clearInterval(id);
   }, [status]);
 
-  const elapsedMs = startedAt === null ? 0 : (finishedAt ?? now) - startedAt;
+  // `now` only ticks every 200ms, so right after start it can predate
+  // `startedAt`; clamp so the scoreboard never shows negative time.
+  const elapsedMs = startedAt === null ? 0 : Math.max(0, (finishedAt ?? now) - startedAt);
 
   const metrics = useMemo(
     () =>
@@ -164,33 +166,54 @@ export function SessionView({ problem, solution, onExit, onNext }: SessionViewPr
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [exit, handleNext, handleRetry, onNext]);
 
+  const progressPct =
+    solution.code.length === 0 ? 0 : Math.min(100, (correctChars / solution.code.length) * 100);
+
   return (
-    <div className="flex h-screen flex-col bg-neutral-950 text-neutral-100">
-      <header className="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
-        <div className="flex items-center gap-3">
+    <div className="flex h-screen flex-col bg-cobalt-900 text-paper">
+      <div
+        className="h-1.5 shrink-0 bg-cobalt-700"
+        role="progressbar"
+        aria-label="Reference typed"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(progressPct)}
+      >
+        <div
+          className="h-full bg-pink transition-[width] duration-150 ease-out"
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b-2 border-cobalt-700 px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={exit}
-            className="rounded px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-white"
+            className="shrink-0 text-sm font-medium text-cobalt-300 hover:text-paper"
           >
-            ← Library
+            Library /
           </button>
-          <span className="font-semibold">CodeType</span>
-          <span className="text-sm text-neutral-400">{problem.title}</span>
-          <span className="text-xs text-neutral-500">{solution.approach}</span>
-          <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-xs text-neutral-400">
+          <h1 className="truncate font-display text-2xl leading-none font-extrabold">
+            {problem.title}
+          </h1>
+          <span className="hidden truncate text-sm text-cobalt-300 lg:inline">
+            {solution.approach}
+          </span>
+          <span className="shrink-0 rounded-full bg-paper px-2.5 py-0.5 text-xs font-bold text-cobalt-900">
             {MODE_LABEL[mode]}
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          <Hud metrics={metrics} elapsedMs={elapsedMs} />
+          <span className="h-8 w-0.5 bg-cobalt-700" aria-hidden="true" />
           <button
             type="button"
             aria-pressed={distractionFree}
             onClick={toggleDistractionFree}
-            className={`rounded border px-2 py-1 text-xs ${
+            className={`rounded-full border-2 px-3 py-1 text-xs font-semibold ${
               distractionFree
-                ? "border-emerald-600 bg-emerald-950 text-emerald-300"
-                : "border-neutral-700 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                ? "border-mint bg-mint text-mint-ink"
+                : "border-cobalt-600 text-cobalt-200 hover:border-cobalt-300 hover:text-paper"
             }`}
           >
             Distraction-free
@@ -198,35 +221,33 @@ export function SessionView({ problem, solution, onExit, onNext }: SessionViewPr
           <button
             type="button"
             onClick={openPalette}
-            className="rounded border border-neutral-700 px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-white"
+            className="rounded-full border-2 border-cobalt-600 px-3 py-1 text-xs font-semibold text-cobalt-200 hover:border-cobalt-300 hover:text-paper"
           >
-            Commands <kbd className="font-mono">⌘K</kbd>
+            Commands <kbd className="font-sans text-cobalt-400">⌘K</kbd>
           </button>
-          <Hud metrics={metrics} elapsedMs={elapsedMs} />
         </div>
       </header>
 
       <ProblemStatementPanel statement={problem.statement} url={problem.url} />
 
-      <main className="relative grid flex-1 grid-cols-2 gap-px overflow-hidden bg-neutral-800">
-        <section className="flex flex-col overflow-hidden bg-neutral-950">
-          <div className="px-3 py-1 text-xs uppercase tracking-wide text-neutral-500">
-            Reference
-          </div>
+      <main className="relative grid flex-1 grid-cols-2 gap-0.5 overflow-hidden bg-cobalt-700">
+        <section className="flex flex-col overflow-hidden bg-cobalt-900">
+          <h2 className="px-4 py-1.5 text-xs font-semibold text-cobalt-300">Reference</h2>
           <div className="flex-1 overflow-hidden">
             {mode === "copy" ? (
               <ReferenceEditor code={solution.code} />
             ) : (
-              <div className="flex h-full items-center justify-center px-8 text-center text-sm text-neutral-600">
-                Reference hidden in {MODE_LABEL[mode]} mode.
+              <div className="flex h-full flex-col items-center justify-center gap-1 px-8 text-center">
+                <span className="font-display text-3xl font-extrabold text-cobalt-600">Hidden</span>
+                <span className="text-sm text-cobalt-400">
+                  {MODE_LABEL[mode]} mode hides the Reference. Type it from memory.
+                </span>
               </div>
             )}
           </div>
         </section>
-        <section className="flex flex-col overflow-hidden bg-neutral-950">
-          <div className="px-3 py-1 text-xs uppercase tracking-wide text-neutral-500">
-            Your code
-          </div>
+        <section className="flex flex-col overflow-hidden bg-cobalt-900">
+          <h2 className="px-4 py-1.5 text-xs font-semibold text-pink">Your code</h2>
           <div className="flex-1 overflow-hidden">
             <TypingEditor
               key={attemptKey}
@@ -250,13 +271,26 @@ export function SessionView({ problem, solution, onExit, onNext }: SessionViewPr
         )}
       </main>
 
-      <footer className="border-t border-neutral-800 px-4 py-1.5 text-xs text-neutral-500">
-        <span>Retype the Reference on the right. Mistakes turn red; paste is disabled.</span>
-        <span className="ml-4">
-          <kbd>Esc/Tab</kbd> restart · <kbd>Enter</kbd> next · <kbd>L</kbd> Library · <kbd>⌘K</kbd>{" "}
-          commands
+      <footer className="flex flex-wrap gap-x-5 gap-y-1 border-t-2 border-cobalt-700 px-4 py-1.5 text-xs text-cobalt-300">
+        <span>Retype the Reference in the right pane. Mistakes turn red, and paste is off.</span>
+        <span className="flex gap-3">
+          <Shortcut keys="Esc/Tab" action="restart" />
+          <Shortcut keys="Enter" action="next" />
+          <Shortcut keys="L" action="Library" />
+          <Shortcut keys="⌘K" action="commands" />
         </span>
       </footer>
     </div>
+  );
+}
+
+function Shortcut({ keys, action }: { keys: string; action: string }) {
+  return (
+    <span>
+      <kbd className="rounded bg-cobalt-700 px-1.5 py-0.5 font-sans font-semibold text-paper">
+        {keys}
+      </kbd>{" "}
+      {action}
+    </span>
   );
 }

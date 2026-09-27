@@ -86,14 +86,14 @@ export function AccountControl() {
     <>
       {isPending ? (
         <div
-          className="h-8 w-8 rounded-full border border-neutral-700 bg-neutral-800"
+          className="h-9 w-9 rounded-full border-2 border-cobalt-600 bg-cobalt-800"
           aria-hidden="true"
         />
       ) : session === null ? (
         <button
           type="button"
           onClick={() => setMode("sign-in")}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600/15"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-2 border-lemon whitespace-nowrap px-3.5 py-1.5 text-sm font-semibold text-lemon hover:bg-lemon hover:text-lemon-ink"
         >
           <svg
             viewBox="0 0 24 24"
@@ -119,7 +119,7 @@ export function AccountControl() {
             aria-expanded={menuOpen}
             aria-label="Account menu"
             title={session.user.email}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-600/70 bg-emerald-900/40 text-xs font-medium text-emerald-200 hover:border-emerald-500 hover:text-emerald-100"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-lemon font-display text-base font-extrabold text-lemon-ink hover:ring-2 hover:ring-lemon/50"
           >
             {avatarInitials(session.user)}
           </button>
@@ -127,17 +127,17 @@ export function AccountControl() {
           {menuOpen && (
             <div
               role="menu"
-              className="absolute right-0 z-50 mt-2 w-52 rounded-xl border border-neutral-700 bg-neutral-900 p-1.5 text-sm shadow-2xl"
+              className="absolute right-0 z-50 mt-2 w-52 rounded-2xl border-2 border-cobalt-600 bg-cobalt-800 p-1.5 text-sm text-paper shadow-2xl shadow-cobalt-950"
             >
-              <div className="border-b border-neutral-800 px-2.5 py-2">
-                <div className="text-xs text-neutral-500">Signed in as</div>
-                <div className="truncate text-neutral-200">{session.user.email}</div>
+              <div className="border-b-2 border-cobalt-700 px-2.5 py-2">
+                <div className="text-xs text-cobalt-300">Signed in as</div>
+                <div className="truncate text-paper">{session.user.email}</div>
               </div>
               <Link
                 to="/stats"
                 role="menuitem"
                 onClick={() => setMenuOpen(false)}
-                className="mt-1 block rounded-lg px-2.5 py-2 text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                className="mt-1 block rounded-lg px-2.5 py-2 font-medium text-cobalt-200 hover:bg-cobalt-700 hover:text-paper"
               >
                 Stats
               </Link>
@@ -151,7 +151,7 @@ export function AccountControl() {
                     await useLibrary.getState().load();
                   });
                 }}
-                className="block w-full rounded-lg px-2.5 py-2 text-left text-rose-300 hover:bg-neutral-800 hover:text-rose-200"
+                className="block w-full rounded-lg px-2.5 py-2 text-left font-medium text-tomato hover:bg-cobalt-700"
               >
                 Sign out
               </button>

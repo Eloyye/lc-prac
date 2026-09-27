@@ -11,19 +11,19 @@ const md = new Marked();
 // container — verbose, but keeps everything in Tailwind and avoids a global CSS
 // stylesheet. Shared by the detail page and (later, #9) the Session panel.
 const PROSE = [
-  "text-sm leading-relaxed text-neutral-300",
+  "text-sm leading-relaxed text-cobalt-200",
   "[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0",
-  "[&_h1]:mt-4 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:text-neutral-100",
-  "[&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-neutral-100",
-  "[&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:font-semibold [&_h3]:text-neutral-200",
-  "[&_strong]:font-semibold [&_strong]:text-neutral-100",
+  "[&_h1]:mt-4 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:text-paper",
+  "[&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-paper",
+  "[&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:font-semibold [&_h3]:text-paper",
+  "[&_strong]:font-semibold [&_strong]:text-paper",
   "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1",
-  "[&_a]:text-emerald-400 [&_a]:underline hover:[&_a]:text-emerald-300",
-  "[&_code]:rounded [&_code]:bg-neutral-800 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:text-neutral-200",
-  "[&_pre]:my-3 [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-neutral-800 [&_pre]:bg-neutral-950 [&_pre]:p-3",
+  "[&_a]:text-pink [&_a]:underline hover:[&_a]:text-pink-light",
+  "[&_code]:rounded [&_code]:bg-cobalt-700 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:text-paper",
+  "[&_pre]:my-3 [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-cobalt-700 [&_pre]:bg-cobalt-950 [&_pre]:p-3",
   "[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-[0.85em]",
-  "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-neutral-700 [&_blockquote]:pl-3 [&_blockquote]:text-neutral-400",
-  "[&_hr]:my-4 [&_hr]:border-neutral-800",
+  "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-cobalt-600 [&_blockquote]:pl-3 [&_blockquote]:text-cobalt-300",
+  "[&_hr]:my-4 [&_hr]:border-cobalt-700",
 ].join(" ");
 
 /**
