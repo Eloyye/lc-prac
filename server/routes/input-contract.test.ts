@@ -5,6 +5,17 @@
  */
 import { pino } from "pino";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  CREATE_ATTEMPT_OPTIONAL,
+  CREATE_ATTEMPT_REQUIRED,
+  FULL_CREATE_ATTEMPT,
+  FULL_PROBLEM_WRITE,
+  MINIMAL_CREATE_ATTEMPT,
+  MINIMAL_PROBLEM_WRITE,
+  PROBLEM_WRITE_OPTIONAL,
+  PROBLEM_WRITE_REQUIRED,
+  SOLUTION_WRITE_REQUIRED,
+} from "../../shared/api/contract-fixtures";
 import { PROBLEMS } from "../../shared/content/problems";
 import type {
   AttemptListResponse,
@@ -687,6 +698,63 @@ describe("local-data Import request", () => {
       ]);
       // Only the first decision is recorded per account; reset for the next case.
       conn.sqlite.exec("DELETE FROM local_data_imports");
+    }
+  });
+});
+
+describe("browser request contracts agree with the server parsers", () => {
+  function without(value: Record<string, unknown>, key: string): Record<string, unknown> {
+    const copy = { ...value };
+    delete copy[key];
+    return copy;
+  }
+
+  it("accepts a minimal and a fully populated Attempt and rejects each missing required field", async () => {
+    // The key maps are type-checked to match CreateAttemptRequest exactly.
+    expect(Object.keys(CREATE_ATTEMPT_OPTIONAL).sort()).toEqual(["createdAt", "errorMap"]);
+    expect((await request("/api/attempts", "POST", MINIMAL_CREATE_ATTEMPT)).status).toBe(201);
+    expect((await request("/api/attempts", "POST", FULL_CREATE_ATTEMPT)).status).toBe(201);
+
+    for (const key of Object.keys(CREATE_ATTEMPT_REQUIRED)) {
+      const fieldErrors = await expectValidation(
+        await request("/api/attempts", "POST", without(MINIMAL_CREATE_ATTEMPT, key)),
+        "Invalid Attempt.",
+      );
+      expect(Object.keys(fieldErrors)).toEqual([key]);
+    }
+  });
+
+  it("accepts a minimal and a fully populated Problem and rejects each missing required field", async () => {
+    expect(Object.keys(PROBLEM_WRITE_OPTIONAL).sort()).toEqual([
+      "examples",
+      "expectedSpace",
+      "expectedTime",
+      "statement",
+      "url",
+    ]);
+    const minimal = await request("/api/problems", "POST", MINIMAL_PROBLEM_WRITE);
+    expect(minimal.status).toBe(201);
+    expect(await minimal.json()).toEqual(MINIMAL_PROBLEM_WRITE);
+    const full = await request("/api/problems", "POST", FULL_PROBLEM_WRITE);
+    expect(full.status).toBe(201);
+    expect(await full.json()).toEqual(FULL_PROBLEM_WRITE);
+
+    for (const key of Object.keys(PROBLEM_WRITE_REQUIRED)) {
+      const fieldErrors = await expectValidation(
+        await request("/api/problems", "POST", without(MINIMAL_PROBLEM_WRITE, key)),
+        "Invalid custom Problem.",
+      );
+      expect(Object.keys(fieldErrors)).toEqual([key]);
+    }
+    for (const key of Object.keys(SOLUTION_WRITE_REQUIRED)) {
+      const fieldErrors = await expectValidation(
+        await request("/api/problems", "POST", {
+          ...MINIMAL_PROBLEM_WRITE,
+          solutions: [without(MINIMAL_PROBLEM_WRITE.solutions[0], key)],
+        }),
+        "Invalid custom Problem.",
+      );
+      expect(Object.keys(fieldErrors)).toEqual([`solutions.0.${key}`]);
     }
   });
 });

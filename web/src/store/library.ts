@@ -102,7 +102,7 @@ export const useLibrary = create<LibraryState>((set, get) => ({
       const bundled = activeResult.problems.filter((problem) => problem.origin === "bundled");
       const custom = activeResult.problems.filter((problem) => problem.origin === "custom");
       const personalization = activeResult.personalization;
-      const authenticated = personalization !== null && personalization !== undefined;
+      const authenticated = personalization !== null;
       const local = authenticated ? null : localBundledState(bundled);
       set({
         bundled,

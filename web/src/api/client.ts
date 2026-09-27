@@ -4,6 +4,8 @@
  * Same-origin in production; Vite proxies `/api` to the Hono server in dev.
  */
 
+import type { ApiErrorResponse } from "@shared/api/errors";
+
 const API_BASE = "/api";
 
 /** A failed API call: a non-2xx response or an unreachable server. */
@@ -36,7 +38,8 @@ function buildUrl(path: string, params?: QueryParams): string {
   return queryString === "" ? `${API_BASE}${path}` : `${API_BASE}${path}?${queryString}`;
 }
 
-type ApiErrorBody = { error?: { code?: string; message?: string } };
+/** A failure body is untrusted: any part of the shared envelope may be missing. */
+type ApiErrorBody = { error?: Partial<ApiErrorResponse["error"]> };
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {

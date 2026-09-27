@@ -7,8 +7,8 @@ import {
   PROBLEM_STATUSES,
 } from "../../shared/domain/problem";
 import type { Problem } from "../../shared/domain/problem";
+import type { ProblemListQuery } from "../../shared/api/problems";
 import { MAX_LIMIT } from "../services/problems";
-import type { ListProblemsQuery } from "../services/problems";
 import { isNonEmptyString, isRecord } from "./validation";
 import type { FieldErrors, Parsed } from "./validation";
 
@@ -17,9 +17,9 @@ function present(value: string | undefined): string | undefined {
 }
 
 /** Parse the Library list query; empty parameters count as absent. */
-export function parseProblemListQuery(raw: Record<string, string>): Parsed<ListProblemsQuery> {
+export function parseProblemListQuery(raw: Record<string, string>): Parsed<ProblemListQuery> {
   const fieldErrors: FieldErrors = {};
-  const value: ListProblemsQuery = {};
+  const value: ProblemListQuery = {};
   const q = present(raw.q);
   if (q !== undefined) value.q = q;
   const tag = present(raw.tag);

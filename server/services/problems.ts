@@ -1,12 +1,10 @@
 import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import type { Example, Problem, ProblemStatus, Solution } from "../../shared/domain/problem";
 import type {
-  Difficulty,
-  Example,
-  Origin,
-  Problem,
-  ProblemStatus,
-  Solution,
-} from "../../shared/domain/problem";
+  ProblemListQuery,
+  ProblemListResponse,
+  ProblemPersonalization,
+} from "../../shared/api/problems";
 import { filterProblems } from "../../shared/content/filter";
 import type { Db } from "../db/client";
 import {
@@ -21,27 +19,6 @@ import {
   tags,
 } from "../db/schema";
 import type { ProblemExampleRow, ProblemRow, SolutionRow } from "../db/schema";
-
-export type ListProblemsQuery = {
-  q?: string;
-  difficulty?: Difficulty;
-  tag?: string;
-  origin?: Origin;
-  status?: ProblemStatus;
-  limit?: number;
-  cursor?: string;
-};
-
-export type ProblemListResult = {
-  problems: Problem[];
-  nextCursor: string | null;
-  personalization: ProblemPersonalization | null;
-};
-
-export type ProblemPersonalization = {
-  overriddenProblemIds: string[];
-  hiddenProblems: Problem[];
-};
 
 export type CustomProblemMutationResult =
   | { kind: "ok"; problem: Problem }
@@ -202,9 +179,9 @@ function loadOwnedCustomRows(
 /** The effective active Library, or the caller's archived custom Problems. */
 export function listProblems(
   db: Db,
-  query: ListProblemsQuery = {},
+  query: ProblemListQuery = {},
   userId?: string,
-): ProblemListResult {
+): ProblemListResponse {
   const status = query.status ?? "active";
   const bundled = status === "active" ? assembleProblems(db, loadBundledRows(db)) : [];
   const personalized =

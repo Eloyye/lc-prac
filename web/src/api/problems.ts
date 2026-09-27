@@ -1,29 +1,13 @@
-import type { Difficulty, Origin, Problem, ProblemStatus } from "@shared/domain/problem";
+import type {
+  ProblemAckResponse,
+  ProblemListQuery,
+  ProblemListResponse,
+} from "@shared/api/problems";
+import type { Problem } from "@shared/domain/problem";
 import { apiGet, apiJson } from "./client";
 
-export type ProblemPersonalization = {
-  overriddenProblemIds: string[];
-  hiddenProblems: Problem[];
-};
-
-export type ProblemListResponse = {
-  problems: Problem[];
-  nextCursor: string | null;
-  personalization?: ProblemPersonalization | null;
-};
-
-export type ProblemListParams = {
-  q?: string;
-  difficulty?: Difficulty;
-  tag?: string;
-  origin?: Origin;
-  status?: ProblemStatus;
-  limit?: number;
-  cursor?: string;
-};
-
 /** The caller's effective Library list. Anonymous callers get bundled Problems. */
-export function listProblems(params: ProblemListParams = {}): Promise<ProblemListResponse> {
+export function listProblems(params: ProblemListQuery = {}): Promise<ProblemListResponse> {
   return apiGet<ProblemListResponse>("/problems", {
     q: params.q,
     difficulty: params.difficulty,
@@ -61,8 +45,8 @@ export function archiveProblem(id: string): Promise<Problem> {
 }
 
 /** Create the signed-in caller's Tombstone without removing an Override. */
-export function hideBundledProblem(id: string): Promise<{ ok: true }> {
-  return apiJson<{ ok: true }>("DELETE", `/problems/${encodeURIComponent(id)}`);
+export function hideBundledProblem(id: string): Promise<ProblemAckResponse> {
+  return apiJson<ProblemAckResponse>("DELETE", `/problems/${encodeURIComponent(id)}`);
 }
 
 /** Return an archived custom Problem to the active Library. */
@@ -71,13 +55,13 @@ export function restoreProblem(id: string): Promise<Problem> {
 }
 
 /** Remove only the signed-in caller's Tombstone. */
-export function restoreBundledProblem(id: string): Promise<{ ok: true }> {
-  return apiJson<{ ok: true }>("POST", `/problems/${encodeURIComponent(id)}/restore`);
+export function restoreBundledProblem(id: string): Promise<ProblemAckResponse> {
+  return apiJson<ProblemAckResponse>("POST", `/problems/${encodeURIComponent(id)}/restore`);
 }
 
 /** Remove only the signed-in caller's Override. */
-export function resetBundledProblem(id: string): Promise<{ ok: true }> {
-  return apiJson<{ ok: true }>("POST", `/problems/${encodeURIComponent(id)}/reset`);
+export function resetBundledProblem(id: string): Promise<ProblemAckResponse> {
+  return apiJson<ProblemAckResponse>("POST", `/problems/${encodeURIComponent(id)}/reset`);
 }
 
 /** Permanently remove one already-archived custom Problem. */
