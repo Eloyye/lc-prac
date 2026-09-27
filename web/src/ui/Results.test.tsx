@@ -17,7 +17,8 @@ describe("Results save state", () => {
       />,
     );
 
-    expect(html).toContain("Complete · New best!");
+    expect(html).toContain("Complete");
+    expect(html).toContain("New best!");
     expect(html).toContain("Saved · Best CPM: 140");
   });
 

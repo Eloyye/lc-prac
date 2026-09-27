@@ -9,15 +9,15 @@ export function ProblemStatementPanel({ statement, url }: ProblemStatementPanelP
   if (!hasStatement && url === undefined) return null;
 
   return (
-    <details className="group shrink-0 border-b border-neutral-800 bg-neutral-950">
-      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2 text-xs uppercase tracking-wide text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200 [&::-webkit-details-marker]:hidden">
+    <details className="group shrink-0 border-b-2 border-cobalt-700 bg-cobalt-850">
+      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2 text-xs font-semibold text-cobalt-200 hover:bg-cobalt-800 hover:text-paper [&::-webkit-details-marker]:hidden">
         <span>Problem statement</span>
-        <span className="normal-case tracking-normal text-neutral-500">
+        <span className="text-cobalt-400">
           <span className="group-open:hidden">Show</span>
           <span className="hidden group-open:inline">Hide</span>
         </span>
       </summary>
-      <div className="max-h-64 overflow-y-auto border-t border-neutral-800 px-4 py-3">
+      <div className="max-h-64 overflow-y-auto border-t-2 border-cobalt-700 px-4 py-3">
         {hasStatement ? (
           <Markdown source={statement} />
         ) : (
@@ -25,7 +25,7 @@ export function ProblemStatementPanel({ statement, url }: ProblemStatementPanelP
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="text-sm text-emerald-400 hover:text-emerald-300"
+            className="text-sm font-semibold text-pink hover:text-pink-light"
           >
             View problem statement at source ↗
           </a>

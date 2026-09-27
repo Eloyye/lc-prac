@@ -12,9 +12,9 @@ export type HeaderMenuItem = {
 };
 
 const ITEM_VARIANT: Record<"default" | "primary" | "danger", string> = {
-  default: "text-neutral-300 hover:bg-neutral-800 hover:text-white",
-  primary: "text-emerald-300 hover:bg-neutral-800 hover:text-emerald-200",
-  danger: "text-rose-300 hover:bg-neutral-800 hover:text-rose-200",
+  default: "font-medium text-cobalt-200 hover:bg-cobalt-700 hover:text-paper",
+  primary: "font-bold text-pink hover:bg-cobalt-700 hover:text-pink-light",
+  danger: "font-medium text-tomato hover:bg-cobalt-700",
 };
 
 /**
@@ -56,7 +56,7 @@ export function HeaderMenu({ items, className }: { items: HeaderMenuItem[]; clas
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Menu"
-        className="flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-700 text-neutral-300 hover:border-neutral-500 hover:text-white"
+        className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-cobalt-600 text-cobalt-200 hover:border-cobalt-300 hover:text-paper"
       >
         <svg
           viewBox="0 0 24 24"
@@ -75,7 +75,7 @@ export function HeaderMenu({ items, className }: { items: HeaderMenuItem[]; clas
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-2 w-52 rounded-xl border border-neutral-700 bg-neutral-900 p-1.5 text-sm shadow-2xl"
+          className="absolute right-0 z-50 mt-2 w-52 rounded-2xl border-2 border-cobalt-600 bg-cobalt-800 p-1.5 text-sm text-paper shadow-2xl shadow-cobalt-950"
         >
           {items.map((item) => (
             <button
@@ -93,9 +93,7 @@ export function HeaderMenu({ items, className }: { items: HeaderMenuItem[]; clas
               }`}
             >
               <span>{item.label}</span>
-              {item.kbd !== undefined && (
-                <kbd className="font-mono text-xs text-neutral-500">{item.kbd}</kbd>
-              )}
+              {item.kbd !== undefined && <kbd className="text-xs text-cobalt-400">{item.kbd}</kbd>}
             </button>
           ))}
         </div>

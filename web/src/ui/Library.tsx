@@ -6,6 +6,8 @@ import type { DifficultyFilter } from "@shared/content/filter";
 import { usePreferences } from "../store/preferences";
 import { useHistory } from "../store/history";
 import { ProblemCard } from "./ProblemCard";
+import { SetlistRow } from "./SetlistRow";
+import { DIFFICULTY_BORDER, DIFFICULTY_COLOR, DIFFICULTY_FILL, DIFFICULTY_INK } from "./difficulty";
 import { ProblemDialog } from "./ProblemDialog";
 import { AccountControl } from "./AccountControl";
 import { authClient } from "../api/auth";
@@ -19,9 +21,14 @@ const DIFFICULTIES: DifficultyFilter[] = ["all", ...PROBLEM_DIFFICULTIES];
 /** Inline (≥md) button styling for a header action, keyed off its menu variant. */
 function actionClass(variant: HeaderMenuItem["variant"]): string {
   return variant === "primary"
-    ? "rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-    : "rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-400 hover:border-neutral-500 hover:text-white";
+    ? "rounded-full bg-pink px-4 py-2 text-sm font-bold text-pink-ink hover:bg-pink-light"
+    : secondaryButton;
 }
+
+const secondaryButton =
+  "rounded-full border-2 border-cobalt-600 px-3.5 py-1.5 text-sm font-semibold text-cobalt-200 hover:border-cobalt-300 hover:text-paper";
+const restoreButton =
+  "rounded-full border-2 border-mint px-3 py-1 text-sm font-semibold text-mint hover:bg-mint hover:text-mint-ink";
 
 export function Library() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
@@ -115,14 +122,23 @@ export function Library() {
     },
   ];
 
+  const pill =
+    "rounded-full border-2 px-3.5 py-1 text-sm font-semibold capitalize transition-colors";
+
   return (
-    <div className="relative min-h-screen bg-neutral-950 text-neutral-100">
-      <div className="mx-auto max-w-5xl px-6 py-8">
-        <header className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">CodeType</h1>
-            <p className="text-sm text-neutral-400">
-              Pick a solution to practice typing from memory.
+    <div className="relative min-h-screen bg-cobalt-900 text-paper">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+        <header className="mb-6 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="font-display text-4xl leading-none font-black tracking-tight whitespace-nowrap sm:text-6xl">
+              CodeType
+              <span
+                className="ml-1 inline-block h-[0.72em] w-[0.28em] translate-y-[0.06em] bg-pink motion-safe:animate-pulse"
+                aria-hidden="true"
+              />
+            </h1>
+            <p className="mt-2 text-sm text-cobalt-300">
+              Pick a solution and type it until it sticks.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -138,80 +154,113 @@ export function Library() {
                 >
                   {action.label}
                   {action.kbd !== undefined && (
-                    <kbd className="ml-1 font-mono text-xs">{action.kbd}</kbd>
+                    <kbd className="ml-1.5 font-sans text-xs text-cobalt-400">{action.kbd}</kbd>
                   )}
                 </button>
               ))}
             </div>
             <HeaderMenu items={actions} className="md:hidden" />
-            <span className="mx-1 h-6 w-px bg-neutral-700" aria-hidden="true" />
+            <span className="mx-1 h-6 w-0.5 bg-cobalt-700" aria-hidden="true" />
             <AccountControl />
           </div>
         </header>
 
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <div className="flex rounded-lg border border-neutral-700 p-0.5 text-sm">
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          <div
+            className="flex rounded-full bg-cobalt-950 p-1 text-sm"
+            role="group"
+            aria-label="Library view"
+          >
             {(["active", "hidden", "archived"] as const).map((candidate) => (
               <button
                 key={candidate}
                 type="button"
+                aria-pressed={view === candidate}
                 onClick={() => setView(candidate)}
-                className={`rounded-md px-3 py-1.5 capitalize ${
-                  view === candidate ? "bg-neutral-700 text-white" : "text-neutral-400"
+                className={`rounded-full px-3.5 py-1 font-semibold capitalize ${
+                  view === candidate
+                    ? "bg-paper text-cobalt-900"
+                    : "text-cobalt-300 hover:text-paper"
                 }`}
               >
                 {candidate}
               </button>
             ))}
           </div>
-          <input
-            className="w-56 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-neutral-500"
-            placeholder="Search problems…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <div className="flex gap-1">
-            {DIFFICULTIES.map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setDifficulty(d)}
-                className={`rounded-lg px-3 py-1.5 text-sm capitalize ${
-                  difficulty === d
-                    ? "bg-neutral-700 text-white"
-                    : "text-neutral-400 hover:bg-neutral-800"
-                }`}
-              >
-                {d}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Difficulty">
+            {DIFFICULTIES.map((d) => {
+              const selected = difficulty === d;
+              if (d === "all") {
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setDifficulty(d)}
+                    className={`${pill} ${
+                      selected
+                        ? "border-paper bg-paper text-cobalt-900"
+                        : "border-cobalt-600 text-cobalt-200 hover:border-cobalt-300"
+                    }`}
+                  >
+                    All
+                  </button>
+                );
+              }
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setDifficulty(d)}
+                  className={`${pill} ${DIFFICULTY_BORDER[d]} ${
+                    selected
+                      ? `${DIFFICULTY_FILL[d]} ${DIFFICULTY_INK[d]}`
+                      : `${DIFFICULTY_COLOR[d]} hover:bg-cobalt-800`
+                  }`}
+                >
+                  {d}
+                </button>
+              );
+            })}
           </div>
-          <select
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-neutral-500"
-            value={tag ?? ""}
-            onChange={(e) => setTag(e.target.value === "" ? null : e.target.value)}
-          >
-            <option value="">All tags</option>
-            {tags.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+          <div className="flex w-full gap-2 sm:ml-auto sm:w-auto">
+            <input
+              type="search"
+              aria-label="Search problems"
+              className="min-w-0 flex-1 rounded-full border-2 border-cobalt-600 bg-cobalt-950 px-4 py-1.5 text-sm text-paper outline-none placeholder:text-cobalt-400 focus:border-pink sm:w-52"
+              placeholder="Search problems"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <select
+              aria-label="Filter by tag"
+              className="rounded-full border-2 border-cobalt-600 bg-cobalt-950 px-3 py-1.5 text-sm text-paper outline-none focus:border-pink"
+              value={tag ?? ""}
+              onChange={(e) => setTag(e.target.value === "" ? null : e.target.value)}
+            >
+              <option value="">All tags</option>
+              {tags.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {actionError !== null && <p className="mb-4 text-sm text-rose-400">{actionError}</p>}
+        {actionError !== null && <p className="mb-4 text-sm text-tomato">{actionError}</p>}
 
         {session !== null && (historyStatus === "idle" || historyStatus === "loading") && (
-          <p className="mb-4 text-sm text-neutral-500">Loading Personal Bests…</p>
+          <p className="mb-4 text-sm text-cobalt-400">Loading Personal Bests…</p>
         )}
         {session !== null && historyStatus === "error" && (
           <div className="mb-4 flex items-center gap-3 text-sm">
-            <p className="text-rose-400">{historyError ?? "Could not load Personal Bests."}</p>
+            <p className="text-tomato">{historyError ?? "Could not load Personal Bests."}</p>
             <button
               type="button"
               onClick={() => void loadHistory().catch(() => {})}
-              className="rounded border border-neutral-700 px-2 py-1 text-neutral-300 hover:border-neutral-500"
+              className={secondaryButton}
             >
               Retry
             </button>
@@ -220,21 +269,19 @@ export function Library() {
 
         {status === "error" ? (
           <div className="flex flex-col items-start gap-3">
-            <p className="text-rose-400">{error ?? "Could not load the library."}</p>
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-300 hover:border-neutral-500 hover:text-white"
-            >
+            <p className="text-tomato">{error ?? "Could not load the library."}</p>
+            <button type="button" onClick={() => void load()} className={secondaryButton}>
               Retry
             </button>
           </div>
         ) : status !== "ready" ? (
-          <p className="text-neutral-500">Loading library…</p>
+          <p className="text-cobalt-400">Loading library…</p>
         ) : filtered.length === 0 ? (
-          <p className="text-neutral-500">No problems match your filters.</p>
+          <p className="border-t border-cobalt-700 py-10 text-center text-cobalt-300">
+            No problems match these filters. Clear the search or pick another difficulty.
+          </p>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="border-b border-cobalt-700">
             {filtered.map((problem) =>
               view === "active" ? (
                 <ProblemCard
@@ -246,72 +293,58 @@ export function Library() {
                   onArchive={archive}
                 />
               ) : view === "archived" ? (
-                <div
+                <SetlistRow
                   key={problem.id}
-                  className="flex flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-4"
-                >
-                  <div>
-                    <h3 className="font-medium text-neutral-100">{problem.title}</h3>
-                    <span className="text-xs uppercase text-neutral-500">{problem.difficulty}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {problem.tags.map((problemTag) => (
-                      <span
-                        key={problemTag}
-                        className="rounded bg-neutral-800 px-1.5 py-0.5 text-xs text-neutral-400"
-                      >
-                        {problemTag}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mt-auto flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void restoreProblem(problem.id).catch(() => {})}
-                      className="rounded-lg border border-emerald-700 px-3 py-1.5 text-sm text-emerald-300 hover:border-emerald-500"
-                    >
-                      Restore
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => permanentlyDelete(problem)}
-                      className="rounded-lg border border-red-900 px-3 py-1.5 text-sm text-red-400 hover:border-red-600"
-                    >
-                      Delete permanently
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  key={problem.id}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4"
-                >
-                  <div>
-                    <h3 className="font-medium text-neutral-100">{problem.title}</h3>
-                    <span className="text-xs uppercase text-neutral-500">{problem.difficulty}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {overriddenProblemIds.includes(problem.id) && (
+                  problem={problem}
+                  title={problem.title}
+                  aside={
+                    <>
                       <button
                         type="button"
-                        onClick={() => void resetProblem(problem.id).catch(() => {})}
-                        className="text-xs text-neutral-500 hover:text-neutral-200"
+                        onClick={() => void restoreProblem(problem.id).catch(() => {})}
+                        className={restoreButton}
                       >
-                        Reset
+                        Restore
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => void restoreProblem(problem.id).catch(() => {})}
-                      className="rounded-lg border border-emerald-700 px-3 py-1.5 text-sm text-emerald-300 hover:border-emerald-500"
-                    >
-                      Restore
-                    </button>
-                  </div>
-                </div>
+                      <button
+                        type="button"
+                        onClick={() => permanentlyDelete(problem)}
+                        className="rounded-full border-2 border-tomato px-3 py-1 text-sm font-semibold text-tomato hover:bg-tomato hover:text-tomato-ink"
+                      >
+                        Delete permanently
+                      </button>
+                    </>
+                  }
+                />
+              ) : (
+                <SetlistRow
+                  key={problem.id}
+                  problem={problem}
+                  title={problem.title}
+                  aside={
+                    <>
+                      {overriddenProblemIds.includes(problem.id) && (
+                        <button
+                          type="button"
+                          onClick={() => void resetProblem(problem.id).catch(() => {})}
+                          className="text-xs font-medium text-cobalt-300 hover:text-paper"
+                        >
+                          Reset
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void restoreProblem(problem.id).catch(() => {})}
+                        className={restoreButton}
+                      >
+                        Restore
+                      </button>
+                    </>
+                  }
+                />
               ),
             )}
-          </div>
+          </ul>
         )}
       </div>
 
