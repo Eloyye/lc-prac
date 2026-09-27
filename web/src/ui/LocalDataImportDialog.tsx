@@ -3,7 +3,7 @@ import type {
   LocalDataCollection,
   LocalDataImportCounts,
   LocalDataImportReport,
-} from "@shared/types";
+} from "@shared/api/local-data-import";
 import type { LocalDataSnapshot } from "../persistence/storage";
 import { useLocalDataImport } from "../store/local-data-import";
 

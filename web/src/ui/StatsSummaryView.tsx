@@ -1,4 +1,4 @@
-import type { StatsSummary } from "@shared/types";
+import type { StatsSummary } from "@shared/api/stats";
 
 export function StatsSummaryView({ summary }: { summary: StatsSummary }) {
   return (

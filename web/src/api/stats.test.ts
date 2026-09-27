@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { BestScoreListResponse, StatsSummary } from "@shared/types";
+import type { BestScoreListResponse, StatsSummary } from "@shared/api/stats";
 import { getStatsSummary, listBestScores } from "./stats";
 
 afterEach(() => {

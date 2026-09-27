@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Problem, Solution } from "@shared/types";
+import type { Problem, Solution } from "@shared/domain/problem";
 import {
   archiveProblem,
   createProblem,

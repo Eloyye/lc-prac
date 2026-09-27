@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Problem } from "@shared/types";
+import type { Problem } from "@shared/domain/problem";
 import { ApiError } from "./client";
 import {
   archiveProblem,

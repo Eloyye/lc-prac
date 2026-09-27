@@ -7,7 +7,8 @@ import {
   isNonNegativeInteger,
   isRecord,
 } from "./validation";
-import type { FieldErrors, Parsed } from "./validation";
+import type { FieldErrors } from "../../shared/api/errors";
+import type { Parsed } from "./validation";
 
 export function parseAttempt(body: unknown): Parsed<CreateAttemptValues> {
   if (!isRecord(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };

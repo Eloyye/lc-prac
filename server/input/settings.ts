@@ -3,7 +3,8 @@ import { isMode, MODES } from "../../shared/domain/mode";
 import type { Mode } from "../../shared/domain/mode";
 import type { Settings } from "../../shared/domain/settings";
 import { isRecord } from "./validation";
-import type { FieldErrors, Parsed } from "./validation";
+import type { FieldErrors } from "../../shared/api/errors";
+import type { Parsed } from "./validation";
 
 const SETTINGS_FIELDS = new Set(["mode", "distractionFree"]);
 

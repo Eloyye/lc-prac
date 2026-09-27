@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { LocalDataImportReport } from "@shared/types";
+import type { LocalDataImportReport } from "@shared/api/local-data-import";
 import { LocalDataImportReportDetails } from "./LocalDataImportDialog";
 
 describe("LocalDataImportDialog", () => {

@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { Mode, SavedBestScore } from "@shared/types";
+import type { SavedBestScore } from "@shared/domain/attempt";
+import type { Mode } from "@shared/domain/mode";
 import { listBestScores } from "../api/stats";
 
 export type HistoryStatus = "idle" | "loading" | "ready" | "error";

@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LocalDataImportResponse, LocalDataImportStatusResponse } from "@shared/types";
+import type {
+  LocalDataImportResponse,
+  LocalDataImportStatusResponse,
+} from "@shared/api/local-data-import";
 import {
   getLocalDataImportStatus,
   importLocalData,

@@ -1,6 +1,6 @@
 import type { HistoryFilters } from "../../shared/api/history";
 import { isMode, MODES } from "../../shared/domain/mode";
-import type { FieldErrors } from "./validation";
+import type { FieldErrors } from "../../shared/api/errors";
 
 export type ParsedHistoryQuery =
   | { ok: true; filters: HistoryFilters; limit?: number }

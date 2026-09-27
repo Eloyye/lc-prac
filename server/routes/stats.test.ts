@@ -1,7 +1,7 @@
 import { pino } from "pino";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PROBLEMS } from "../../shared/content/problems";
-import type { BestScoreListResponse, StatsSummary } from "../../shared/types";
+import type { BestScoreListResponse, StatsSummary } from "../../shared/api/stats";
 import { createApp } from "../app";
 import { createAuth } from "../auth";
 import { openDatabase } from "../db/client";

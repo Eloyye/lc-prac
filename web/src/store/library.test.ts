@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Problem } from "@shared/types";
+import type { Problem } from "@shared/domain/problem";
 import type { ProblemListResponse } from "@shared/api/problems";
 
 vi.mock("../api/problems", () => ({

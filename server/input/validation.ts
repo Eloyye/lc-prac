@@ -1,7 +1,5 @@
 import type { FieldErrors } from "../../shared/api/errors";
 
-export type { FieldErrors };
-
 /** Outcome of parsing one input: its normalized value, or field-level messages. */
 export type Parsed<T> = { ok: true; value: T } | { ok: false; fieldErrors: FieldErrors };
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import type { StatsSummary } from "@shared/types";
+import type { StatsSummary } from "@shared/api/stats";
 import { authClient } from "../api/auth";
 import { getStatsSummary } from "../api/stats";
 import { AccountControl } from "./AccountControl";

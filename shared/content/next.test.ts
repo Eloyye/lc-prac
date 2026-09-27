@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Problem } from "../types";
+import type { Problem } from "../domain/problem";
 import { nextPracticeTarget } from "./next";
 
 function problem(id: string, difficulty: Problem["difficulty"], tags: string[]): Problem {

@@ -10,7 +10,8 @@ import type { Problem } from "../../shared/domain/problem";
 import type { ProblemListQuery } from "../../shared/api/problems";
 import { MAX_LIMIT } from "../services/problems";
 import { isNonEmptyString, isRecord } from "./validation";
-import type { FieldErrors, Parsed } from "./validation";
+import type { FieldErrors } from "../../shared/api/errors";
+import type { Parsed } from "./validation";
 
 function present(value: string | undefined): string | undefined {
   return value !== undefined && value !== "" ? value : undefined;

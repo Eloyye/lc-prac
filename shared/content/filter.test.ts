@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { Problem } from "../types";
+import type { Problem } from "../domain/problem";
 import { allTags, filterProblems } from "./filter";
 
 function make(

@@ -17,13 +17,10 @@ import {
   SOLUTION_WRITE_REQUIRED,
 } from "../../shared/api/contract-fixtures";
 import { PROBLEMS } from "../../shared/content/problems";
-import type {
-  AttemptListResponse,
-  CreateAttemptResponse,
-  LocalDataImportResponse,
-  Problem,
-  SettingsResponse,
-} from "../../shared/types";
+import type { AttemptListResponse, CreateAttemptResponse } from "../../shared/api/attempts";
+import type { LocalDataImportResponse } from "../../shared/api/local-data-import";
+import type { SettingsResponse } from "../../shared/api/settings";
+import type { Problem } from "../../shared/domain/problem";
 import { createApp } from "../app";
 import { createAuth } from "../auth";
 import { openDatabase } from "../db/client";

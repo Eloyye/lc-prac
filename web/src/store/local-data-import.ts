@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { LocalDataImportReport } from "@shared/types";
+import type { LocalDataImportReport } from "@shared/api/local-data-import";
 import {
   getLocalDataImportStatus,
   importLocalData,

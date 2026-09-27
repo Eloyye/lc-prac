@@ -4,7 +4,7 @@ import { parseImportedAttempt } from "./attempt";
 import { parseProblem } from "./problem";
 import { parseImportedSettings } from "./settings";
 import { isNonEmptyString, isRecord } from "./validation";
-import type { FieldErrors } from "./validation";
+import type { FieldErrors } from "../../shared/api/errors";
 
 export type ParsedLocalDataImportRequest =
   | { ok: true; action: "skip"; idempotencyToken: string }

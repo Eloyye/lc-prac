@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { loadSettings, saveSettings } from "../persistence/storage";
-import type { Mode, Settings } from "@shared/types";
+import type { Mode } from "@shared/domain/mode";
+import type { Settings } from "@shared/domain/settings";
 import { getSettings, replaceSettings } from "../api/settings";
 
 type PreferencesStatus = "loading" | "ready" | "error";

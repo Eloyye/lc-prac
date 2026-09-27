@@ -1,11 +1,8 @@
 import { and, desc, eq } from "drizzle-orm";
-import type {
-  CreateAttemptResponse,
-  HistoryFilters,
-  Mode,
-  SavedAttempt,
-  SavedBestScore,
-} from "../../shared/types";
+import type { CreateAttemptResponse } from "../../shared/api/attempts";
+import type { HistoryFilters } from "../../shared/api/history";
+import type { SavedAttempt, SavedBestScore } from "../../shared/domain/attempt";
+import type { Mode } from "../../shared/domain/mode";
 import type { Db } from "../db/client";
 import { attempts, bestScores } from "../db/schema";
 import type { AttemptRow, BestScoreRow } from "../db/schema";
