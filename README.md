@@ -5,11 +5,14 @@ solution on the right; mistakes are flagged but never block; complete it to see
 your speed and accuracy. See [docs/PRD.md](docs/PRD.md) and
 [docs/TECH_SPEC.md](docs/TECH_SPEC.md).
 
-**Status:** Phase 1 in progress. A curated Python problem set with browse/filter
-and custom import; email/password accounts with persistent sessions; Copy-mode
-typing with char-by-char feedback, auto-indent, live HUD, results, and local
-persistence. IntelliSense (completion, hover, signature help, and diagnostics
-via pyright) is built into development and production.
+**Status:** A curated Python problem set with browse/filter; Copy-mode typing
+with char-by-char feedback, auto-indent, live HUD, and results; IntelliSense
+(completion, hover, signature help, and diagnostics via pyright) in development
+and production. Email/password accounts sync custom Problems, edits and hides of
+bundled Problems, Attempts, Personal Bests, Stats, and Settings to the server,
+with a one-time import of existing browser data. Anonymous users can practice,
+but their Sessions are not saved. Recall/Free progressive reveal and spaced
+repetition are not built yet; see [docs/TECH_SPEC.md §19](docs/TECH_SPEC.md#19-known-gaps--next-work).
 
 ## Quickstart
 
@@ -54,7 +57,8 @@ install is required. `vite preview` does not include the LSP.
 
 `pnpm build` compiles the client to `dist/`; `pnpm start` runs the Hono server
 (`server/index.ts` via tsx). One process serves the built SPA, the `/api`
-surface (health, Better Auth, current identity, and the Problem Library), `/lsp`,
+surface (health, Better Auth, current identity, Problems, Attempts, Stats,
+Settings, and local-data import), `/lsp`,
 and the client-routing fallback so deep links like `/problems/two-sum` resolve
 on direct load and refresh. Every HTTP request gets an `x-request-id`; HTTP and
 LSP lifecycle logs are structured Pino output (JSON in production, pretty in
@@ -63,8 +67,9 @@ text, or JSON-RPC payloads.
 
 The Library is database-backed: bundled Problems live in SQLite (Drizzle ORM
 over `better-sqlite3`), not in the client bundle. The server applies migrations
-on boot; seed the bundled content once with `pnpm db:seed`. A production rollout
-is build → `pnpm db:migrate` → `pnpm db:seed` → `pnpm start`. In development
+on boot but never seeds; run `pnpm db:seed` on first deploy and whenever the
+bundled content changes. A production rollout is build → `pnpm db:seed` →
+`pnpm start`. In development
 `pnpm dev` runs the API alongside Vite (which proxies `/api` to it); run
 `pnpm db:seed` once so the Library has content to load.
 
@@ -85,26 +90,30 @@ Configuration is validated at startup and fails fast with an actionable message
 
 ## Layout
 
+See [docs/TECH_SPEC.md §5](docs/TECH_SPEC.md#5-repository-layout) for detail.
+
 ```
 vite.config.ts     root-level Vite app config (rooted at web/) that doubles as
                    the repo-wide Vitest config; mounts the shared pyright LSP in
                    development and proxies /api to the Hono server
 drizzle/           generated SQL migrations + snapshot metadata
-shared/            framework-agnostic domain core, imported by web and server
-  types.ts         Problem/Solution/Example/Attempt/Settings domain types
+shared/            framework-agnostic core, imported by web and server
+  domain/          Problem/Solution/Attempt/Settings/Mode types + value sets
+  api/             per-endpoint request/response contracts + response decoders
   content/         bundled problems (seed source) + filtering + next-target
-server/            production app server (Hono): /api/health, /api/problems, /lsp,
-                   request logging, env validation, static + SPA fallback (index.ts)
-  db/              Drizzle schema, client (pragmas), migrate, seed (bundled content)
-  services/        problem read model + DTO mapping
-  routes/          health, problems (list/detail, filters)
-web/               frontend app (Vite root); imports the domain core via @shared/*
-  index.html       Vite HTML entry
+server/            production app server (Hono) — entrypoint index.ts
+  db/              Drizzle schema, client (pragmas), migrate, seed
+  middleware/      request logging, session context, requireUser
+  input/           request parsing/validation
+  routes/          health, me, problems, attempts, stats, settings, local-data-import
+  services/        authorization-scoped business logic over Drizzle
+  lsp.ts           pyright WebSocket bridge (shared with Vite dev)
+web/               frontend app (Vite root); imports the core via @shared/*
   src/
     typing-engine/ pure logic (diff, metrics, indent) + unit tests
     editor/        Monaco setup, decorations, editors, LSP client (lsp.ts)
-    api/           typed browser API client (problems)
-    store/         Zustand session + library state (async, API-backed)
-    persistence/   localStorage wrapper (attempts, best scores, custom problems)
-    ui/            Library, ProblemCard, ImportDialog, SessionView, Hud, Results
+    api/           typed browser API client + Better Auth client
+    store/         Zustand: library, session, history, preferences, import
+    persistence/   localStorage (anonymous state + legacy import source)
+    ui/            Library, ProblemDetail, SessionView, Hud, Results, Stats, dialogs
 ```
