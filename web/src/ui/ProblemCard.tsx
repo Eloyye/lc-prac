@@ -1,5 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import type { Mode, Problem, SavedBestScore } from "@shared/types";
+import type { SavedBestScore } from "@shared/domain/attempt";
+import type { Mode } from "@shared/domain/mode";
+import type { Problem } from "@shared/domain/problem";
 import type { LibrarySearch } from "@shared/content/filter";
 import { bestFor } from "../store/history";
 import { DIFFICULTY_COLOR } from "./difficulty";

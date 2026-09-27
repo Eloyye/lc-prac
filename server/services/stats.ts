@@ -1,5 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
-import type { HistoryFilters, SavedBestScore, StatsSummary } from "../../shared/types";
+import type { HistoryFilters } from "../../shared/api/history";
+import type { StatsSummary } from "../../shared/api/stats";
+import type { SavedBestScore } from "../../shared/domain/attempt";
 import type { Db } from "../db/client";
 import { attempts, bestScores } from "../db/schema";
 import { listAttempts, toBestScore } from "./attempts";

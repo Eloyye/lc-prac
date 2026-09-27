@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { eq } from "drizzle-orm";
-import type { Problem } from "../../shared/types";
+import type { Problem } from "../../shared/domain/problem";
 import { PROBLEMS } from "../../shared/content/problems";
 import { parseEnv } from "../env";
 import { openDatabase } from "./client";

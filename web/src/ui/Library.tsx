@@ -9,11 +9,12 @@ import { ProblemCard } from "./ProblemCard";
 import { ProblemDialog } from "./ProblemDialog";
 import { AccountControl } from "./AccountControl";
 import { authClient } from "../api/auth";
-import type { Problem } from "@shared/types";
+import { DIFFICULTIES as PROBLEM_DIFFICULTIES } from "@shared/domain/problem";
+import type { Problem } from "@shared/domain/problem";
 import { HeaderMenu } from "./HeaderMenu";
 import type { HeaderMenuItem } from "./HeaderMenu";
 
-const DIFFICULTIES: DifficultyFilter[] = ["all", "easy", "medium", "hard"];
+const DIFFICULTIES: DifficultyFilter[] = ["all", ...PROBLEM_DIFFICULTIES];
 
 /** Inline (≥md) button styling for a header action, keyed off its menu variant. */
 function actionClass(variant: HeaderMenuItem["variant"]): string {

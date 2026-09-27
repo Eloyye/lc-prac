@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Problem } from "@shared/types";
-import type { ProblemListResponse } from "../api/problems";
+import type { Problem } from "@shared/domain/problem";
+import type { ProblemListResponse } from "@shared/api/problems";
 
 vi.mock("../api/problems", () => ({
   listProblems: vi.fn(),
@@ -62,7 +62,11 @@ const apiBundled: Problem[] = [
   },
 ];
 
-const ok = (problems: Problem[]): ProblemListResponse => ({ problems, nextCursor: null });
+const ok = (problems: Problem[]): ProblemListResponse => ({
+  problems,
+  nextCursor: null,
+  personalization: null,
+});
 
 function mockLists(active: Problem[], archived: Problem[] = []): void {
   mockedList.mockImplementation((params) =>

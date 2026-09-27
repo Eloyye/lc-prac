@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SettingsResponse } from "@shared/types";
+import type { SettingsResponse } from "@shared/api/settings";
 import { loadSettings, saveSettings } from "../persistence/storage";
 import { usePreferences } from "./preferences";
 

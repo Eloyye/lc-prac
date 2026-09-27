@@ -1,5 +1,7 @@
-/** Field-level messages returned in the API validation error envelope. */
-export type FieldErrors = Record<string, string[]>;
+import type { FieldErrors } from "../../shared/api/errors";
+
+/** Outcome of parsing one input: its normalized value, or field-level messages. */
+export type Parsed<T> = { ok: true; value: T } | { ok: false; fieldErrors: FieldErrors };
 
 /** Narrow an unknown JSON value to an object with string keys. */
 export function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { StatsSummary } from "@shared/types";
+import type { StatsSummary } from "@shared/api/stats";
 import { StatsSummaryView } from "./StatsSummaryView";
 
 function summary(overrides: Partial<StatsSummary> = {}): StatsSummary {

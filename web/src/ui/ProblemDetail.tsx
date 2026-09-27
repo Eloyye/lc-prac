@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import type { Mode, Problem, SavedAttempt, Solution } from "@shared/types";
+import type { SavedAttempt } from "@shared/domain/attempt";
+import type { Mode } from "@shared/domain/mode";
+import type { Problem, Solution } from "@shared/domain/problem";
 import { listAttempts } from "../api/attempts";
 import { authClient } from "../api/auth";
 import { bestFor, useHistory } from "../store/history";

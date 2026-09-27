@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { SavedAttempt } from "@shared/types";
+import type { SavedAttempt } from "@shared/domain/attempt";
 import { RecentAttempts } from "./RecentAttempts";
 
 describe("RecentAttempts", () => {

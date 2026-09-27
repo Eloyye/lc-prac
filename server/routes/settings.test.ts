@@ -1,6 +1,6 @@
 import { pino } from "pino";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { SettingsResponse } from "../../shared/types";
+import type { SettingsResponse } from "../../shared/api/settings";
 import { createApp } from "../app";
 import { createAuth } from "../auth";
 import { openDatabase } from "../db/client";

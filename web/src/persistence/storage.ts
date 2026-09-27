@@ -1,11 +1,8 @@
-import type {
-  Attempt,
-  BestScore,
-  LocalDataImportRequest,
-  Mode,
-  Problem,
-  Settings,
-} from "@shared/types";
+import type { LocalDataImportRequest } from "@shared/api/local-data-import";
+import type { Attempt, BestScore } from "@shared/domain/attempt";
+import type { Mode } from "@shared/domain/mode";
+import type { Problem } from "@shared/domain/problem";
+import type { Settings } from "@shared/domain/settings";
 
 const SCHEMA_VERSION = 2;
 const KEY_VERSION = "ct:v";

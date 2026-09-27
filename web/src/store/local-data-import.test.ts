@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Attempt, LocalDataImportReport, Problem } from "@shared/types";
+import type { LocalDataImportReport } from "@shared/api/local-data-import";
+import type { Attempt } from "@shared/domain/attempt";
+import type { Problem } from "@shared/domain/problem";
 import {
   hideBundledProblem,
   saveAttempt,

@@ -1,4 +1,5 @@
-import type { Mode, SavedAttempt } from "@shared/types";
+import type { SavedAttempt } from "@shared/domain/attempt";
+import type { Mode } from "@shared/domain/mode";
 
 const MODE_LABEL: Record<Mode, string> = {
   copy: "Copy",

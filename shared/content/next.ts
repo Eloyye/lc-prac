@@ -1,6 +1,6 @@
 import { filterFromSearch, filterProblems } from "./filter";
 import type { LibrarySearch } from "./filter";
-import type { Problem, Solution } from "../types";
+import type { Problem, Solution } from "../domain/problem";
 
 export interface PracticeTarget {
   problem: Problem;

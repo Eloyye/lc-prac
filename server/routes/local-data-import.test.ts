@@ -5,8 +5,8 @@ import { PROBLEMS } from "../../shared/content/problems";
 import type {
   LocalDataImportResponse,
   LocalDataImportStatusResponse,
-  Problem,
-} from "../../shared/types";
+} from "../../shared/api/local-data-import";
+import type { Problem } from "../../shared/domain/problem";
 import { createApp } from "../app";
 import { createAuth } from "../auth";
 import { openDatabase } from "../db/client";

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CreateAttemptResponse } from "@shared/types";
+import type { CreateAttemptResponse } from "@shared/api/attempts";
 import { createAttempt, listAttempts } from "./attempts";
 
 const input = {

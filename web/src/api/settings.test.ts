@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SettingsResponse } from "@shared/types";
+import type { SettingsResponse } from "@shared/api/settings";
 import { getSettings, replaceSettings } from "./settings";
 
 afterEach(() => {

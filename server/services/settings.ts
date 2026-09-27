@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { SavedSettings, Settings } from "../../shared/types";
+import type { SavedSettings, Settings } from "../../shared/domain/settings";
 import type { Db } from "../db/client";
 import { userSettings } from "../db/schema";
 

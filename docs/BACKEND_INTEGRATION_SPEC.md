@@ -188,7 +188,9 @@ drizzle.config.ts
 
 Keep shared DTO types in one of these places:
 
-- `shared/` (e.g. `shared/types.ts`) if both browser and server import them.
+- `shared/domain/*` for domain entities and canonical values (Mode, difficulty, Origin),
+  and `shared/api/*` for per-endpoint request, query, response, and error contracts plus
+  their response decoders, when both browser and server import them.
 - `web/src/` only for browser-only types that import no server-only modules.
 
 Do not import `server/*` from `web/src/*`.

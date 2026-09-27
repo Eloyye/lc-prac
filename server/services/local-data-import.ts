@@ -5,8 +5,8 @@ import type {
   LocalDataImportSkippedRecord,
   LocalDataImportStatusResponse,
   LocalSettingsImport,
-  Problem,
-} from "../../shared/types";
+} from "../../shared/api/local-data-import";
+import type { Problem } from "../../shared/domain/problem";
 import type { Db } from "../db/client";
 import {
   attempts,

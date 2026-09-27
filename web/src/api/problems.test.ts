@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Problem } from "@shared/types";
+import type { Problem } from "@shared/domain/problem";
 import { ApiError } from "./client";
 import {
   archiveProblem,
@@ -45,16 +45,20 @@ afterEach(() => {
 
 describe("listProblems", () => {
   it("GETs /api/problems and returns the parsed body", async () => {
-    const fetchSpy = stubFetch(() => jsonResponse({ problems: [twoSum], nextCursor: null }));
+    const fetchSpy = stubFetch(() =>
+      jsonResponse({ problems: [twoSum], nextCursor: null, personalization: null }),
+    );
 
     const result = await listProblems();
 
-    expect(result).toEqual({ problems: [twoSum], nextCursor: null });
+    expect(result).toEqual({ problems: [twoSum], nextCursor: null, personalization: null });
     expect(fetchSpy.mock.calls[0]?.[0]).toBe("/api/problems");
   });
 
   it("builds a query string from filters, omitting absent and empty values", async () => {
-    const fetchSpy = stubFetch(() => jsonResponse({ problems: [], nextCursor: null }));
+    const fetchSpy = stubFetch(() =>
+      jsonResponse({ problems: [], nextCursor: null, personalization: null }),
+    );
 
     await listProblems({
       difficulty: "medium",

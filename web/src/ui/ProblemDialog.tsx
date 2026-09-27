@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import type { Example, Problem, Solution } from "@shared/types";
+import { DIFFICULTIES } from "@shared/domain/problem";
+import type { Difficulty, Example, Problem, Solution } from "@shared/domain/problem";
 
 interface ProblemDialogProps {
   onClose: () => void;
@@ -9,9 +10,6 @@ interface ProblemDialogProps {
   // id + origin are preserved on submit. When absent, it creates a new custom one.
   initial?: Problem;
 }
-
-type Difficulty = "easy" | "medium" | "hard";
-const DIFFICULTIES: Difficulty[] = ["easy", "medium", "hard"];
 
 // Editable form of a Solution: complexity is "" rather than undefined so the
 // inputs stay controlled, and the existing `id` rides along so edits keep the

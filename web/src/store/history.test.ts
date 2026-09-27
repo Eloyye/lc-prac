@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SavedBestScore } from "@shared/types";
+import type { SavedBestScore } from "@shared/domain/attempt";
 
 vi.mock("../api/stats", () => ({ listBestScores: vi.fn() }));
 
