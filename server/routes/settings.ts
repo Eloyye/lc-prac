@@ -1,40 +1,12 @@
 import { Hono } from "hono";
-import { isMode, MODES } from "../../shared/domain/mode";
-import type { Mode } from "../../shared/domain/mode";
-import type { Settings } from "../../shared/domain/settings";
 import type { Db } from "../db/client";
 import type { RequestLoggerVariables } from "../middleware/request-logger";
 import { requireUser } from "../middleware/session";
 import type { AuthVariables } from "../middleware/session";
 import { getSettings, replaceSettings } from "../services/settings";
-import { isRecord } from "./validation";
-import type { FieldErrors } from "./validation";
+import { parseSettings } from "../input/settings";
 
 type RouterVariables = RequestLoggerVariables & AuthVariables;
-type ParsedSettings = { ok: true; value: Settings } | { ok: false; fieldErrors: FieldErrors };
-
-const SETTINGS_FIELDS = new Set(["mode", "distractionFree"]);
-
-function parseSettings(body: unknown): ParsedSettings {
-  if (!isRecord(body)) return { ok: false, fieldErrors: { body: ["Must be a JSON object."] } };
-
-  const fieldErrors: FieldErrors = {};
-  if (!isMode(body.mode)) {
-    fieldErrors.mode = [`Must be one of ${MODES.join(", ")}.`];
-  }
-  if (typeof body.distractionFree !== "boolean") {
-    fieldErrors.distractionFree = ["Must be a boolean."];
-  }
-  for (const field of Object.keys(body)) {
-    if (!SETTINGS_FIELDS.has(field)) fieldErrors[field] = ["Is not a synchronized Setting."];
-  }
-
-  if (Object.keys(fieldErrors).length > 0) return { ok: false, fieldErrors };
-  return {
-    ok: true,
-    value: { mode: body.mode as Mode, distractionFree: body.distractionFree as boolean },
-  };
-}
 
 export function createSettingsRouter(db: Db) {
   const router = new Hono<{ Variables: RouterVariables }>();

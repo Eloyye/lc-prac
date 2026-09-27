@@ -4,7 +4,7 @@ import type { RequestLoggerVariables } from "../middleware/request-logger";
 import { requireUser } from "../middleware/session";
 import type { AuthVariables } from "../middleware/session";
 import { getStatsSummary, listBestScores } from "../services/stats";
-import { parseHistoryQuery } from "./history-query";
+import { parseHistoryQuery } from "../input/history";
 
 type RouterVariables = RequestLoggerVariables & AuthVariables;
 
