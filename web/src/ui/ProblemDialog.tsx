@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { DIFFICULTIES } from "@shared/domain/problem";
 import type { Difficulty, Example, Problem, Solution } from "@shared/domain/problem";
+import * as ui from "./styles";
 
 interface ProblemDialogProps {
   onClose: () => void;
@@ -22,8 +23,11 @@ interface SolutionDraft {
   code: string;
 }
 
-const inputClass =
-  "w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-neutral-500";
+const inputClass = ui.input;
+const subCard = "flex flex-col gap-1.5 rounded-xl bg-cobalt-850 p-3";
+const addButton =
+  "self-start rounded-full border-2 border-dashed border-cobalt-600 px-3 py-1 text-xs font-semibold text-cobalt-200 hover:border-pink hover:text-pink";
+const removeButton = "text-xs font-semibold text-cobalt-400 hover:text-tomato";
 
 function toDraft(solution: Solution): SolutionDraft {
   return {
@@ -141,9 +145,9 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
   };
 
   return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <div className="flex max-h-full w-full max-w-lg flex-col gap-3 overflow-auto rounded-xl border border-neutral-700 bg-neutral-900 p-6">
-        <h2 className="text-lg font-semibold text-neutral-100">
+    <div className={`absolute z-20 ${ui.overlay}`}>
+      <div className={`flex max-h-full max-w-lg flex-col gap-3 overflow-auto ${ui.dialogPanel}`}>
+        <h2 className={`mb-1 ${ui.dialogTitle}`}>
           {editing ? "Edit problem" : "Create custom problem"}
         </h2>
 
@@ -217,21 +221,12 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
         </div>
 
         <div className="flex flex-col gap-1.5 text-left">
-          <span className="text-xs uppercase tracking-wide text-neutral-500">
-            Examples (optional)
-          </span>
+          <span className={ui.fieldLabel}>Examples (optional)</span>
           {examples.map((example, index) => (
-            <div
-              key={index}
-              className="flex flex-col gap-1.5 rounded-lg border border-neutral-800 p-2"
-            >
+            <div key={index} className={subCard}>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-neutral-500">Example {index + 1}</span>
-                <button
-                  type="button"
-                  onClick={() => removeExample(index)}
-                  className="text-xs text-neutral-500 hover:text-red-400"
-                >
+                <span className="text-xs font-medium text-cobalt-300">Example {index + 1}</span>
+                <button type="button" onClick={() => removeExample(index)} className={removeButton}>
                   Remove
                 </button>
               </div>
@@ -257,29 +252,22 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
               />
             </div>
           ))}
-          <button
-            type="button"
-            onClick={addExample}
-            className="self-start rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:border-neutral-500"
-          >
+          <button type="button" onClick={addExample} className={addButton}>
             + Add example
           </button>
         </div>
 
         <div className="flex flex-col gap-1.5 text-left">
-          <span className="text-xs uppercase tracking-wide text-neutral-500">Solutions</span>
+          <span className={ui.fieldLabel}>Solutions</span>
           {solutions.map((solution, index) => (
-            <div
-              key={solution.id}
-              className="flex flex-col gap-1.5 rounded-lg border border-neutral-800 p-2"
-            >
+            <div key={solution.id} className={subCard}>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-neutral-500">Approach {index + 1}</span>
+                <span className="text-xs font-medium text-cobalt-300">Approach {index + 1}</span>
                 {solutions.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removeSolution(solution.id)}
-                    className="text-xs text-neutral-500 hover:text-red-400"
+                    className={removeButton}
                   >
                     Remove
                   </button>
@@ -316,30 +304,22 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
               />
             </div>
           ))}
-          <button
-            type="button"
-            onClick={addSolution}
-            className="self-start rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:border-neutral-500"
-          >
+          <button type="button" onClick={addSolution} className={addButton}>
             + Add approach
           </button>
         </div>
 
-        {error !== null && <p className="text-sm text-red-400">{error}</p>}
+        {error !== null && <p className={ui.errorText}>{error}</p>}
 
         <div className="mt-1 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-800"
-          >
+          <button type="button" onClick={onClose} className={ui.secondaryButton}>
             Cancel
           </button>
           <button
             type="button"
             onClick={() => void submit()}
             disabled={submitting}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
+            className={ui.primaryButton}
           >
             {submitting ? "Saving…" : editing ? "Save" : "Create"}
           </button>
@@ -352,7 +332,7 @@ export function ProblemDialog({ onClose, onSubmit, initial }: ProblemDialogProps
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="flex flex-1 flex-col gap-1 text-left">
-      <span className="text-xs uppercase tracking-wide text-neutral-500">{label}</span>
+      <span className={ui.fieldLabel}>{label}</span>
       {children}
     </label>
   );

@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { authClient } from "../api/auth";
 import { useLibrary } from "../store/library";
+import * as ui from "./styles";
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -162,7 +163,7 @@ export function AccountControl() {
 
       {mode !== null && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          className={`fixed z-50 ${ui.overlay}`}
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) close();
           }}
@@ -171,31 +172,31 @@ export function AccountControl() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="account-title"
-            className="w-full max-w-sm rounded-xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100 shadow-2xl"
+            className={`max-w-sm ${ui.dialogPanel}`}
           >
             <div className="mb-5 flex items-center justify-between">
-              <h2 id="account-title" className="text-lg font-semibold">
+              <h2 id="account-title" className={ui.dialogTitle}>
                 {mode === "sign-up" ? "Create account" : "Sign in"}
               </h2>
-              <button type="button" onClick={close} className="text-neutral-500 hover:text-white">
+              <button type="button" onClick={close} className={ui.closeButton}>
                 Close
               </button>
             </div>
 
             <form className="flex flex-col gap-3" onSubmit={(event) => void submit(event)}>
               {mode === "sign-up" && (
-                <label className="text-sm text-neutral-300">
+                <label className={ui.fieldLabel}>
                   Name
                   <input
                     required
                     autoComplete="name"
                     value={name}
                     onChange={(event) => setName(event.target.value)}
-                    className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 outline-none focus:border-emerald-600"
+                    className={`mt-1 ${ui.input}`}
                   />
                 </label>
               )}
-              <label className="text-sm text-neutral-300">
+              <label className={ui.fieldLabel}>
                 Email
                 <input
                   required
@@ -203,10 +204,10 @@ export function AccountControl() {
                   autoComplete="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 outline-none focus:border-emerald-600"
+                  className={`mt-1 ${ui.input}`}
                 />
               </label>
-              <label className="text-sm text-neutral-300">
+              <label className={ui.fieldLabel}>
                 Password
                 <input
                   required
@@ -215,17 +216,13 @@ export function AccountControl() {
                   autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 outline-none focus:border-emerald-600"
+                  className={`mt-1 ${ui.input}`}
                 />
               </label>
 
-              {error !== null && <p className="text-sm text-rose-400">{error}</p>}
+              {error !== null && <p className={ui.errorText}>{error}</p>}
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="mt-1 rounded-lg bg-emerald-600 px-4 py-2 font-medium hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
-              >
+              <button type="submit" disabled={submitting} className={`mt-2 ${ui.primaryButton}`}>
                 {submitting ? "Please wait…" : mode === "sign-up" ? "Create account" : "Sign in"}
               </button>
             </form>
@@ -236,7 +233,7 @@ export function AccountControl() {
                 setMode(mode === "sign-up" ? "sign-in" : "sign-up");
                 setError(null);
               }}
-              className="mt-4 w-full text-sm text-neutral-400 hover:text-white"
+              className="mt-4 w-full text-sm font-medium text-cobalt-300 hover:text-paper"
             >
               {mode === "sign-up" ? "Already have an account? Sign in" : "Create an account"}
             </button>

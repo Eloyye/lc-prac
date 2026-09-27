@@ -8,23 +8,18 @@ import { authClient } from "../api/auth";
 import { bestFor, useHistory } from "../store/history";
 import { useLibrary } from "../store/library";
 import { usePreferences } from "../store/preferences";
-import { DIFFICULTY_COLOR } from "./difficulty";
+import { DIFFICULTY_COLOR, DIFFICULTY_FILL } from "./difficulty";
 import { Markdown } from "./Markdown";
 import { ProblemDialog } from "./ProblemDialog";
 import { RecentAttempts } from "./RecentAttempts";
 import { AccountControl } from "./AccountControl";
 import { HeaderMenu } from "./HeaderMenu";
 import type { HeaderMenuItem } from "./HeaderMenu";
-
-const sectionHeading = "mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500";
-const inlineSectionHeading = "text-sm font-medium uppercase tracking-wide text-neutral-500";
+import * as ui from "./styles";
 
 /** Inline (≥md) button styling for a header action, keyed off its menu variant. */
 function actionClass(variant: HeaderMenuItem["variant"]): string {
-  const base = "rounded-lg border border-neutral-700 px-3 py-1.5 text-sm";
-  return variant === "danger"
-    ? `${base} text-neutral-300 hover:border-red-500 hover:text-red-400`
-    : `${base} text-neutral-300 hover:border-neutral-500`;
+  return variant === "danger" ? ui.dangerButton : ui.secondaryButton;
 }
 
 // Personal Bests are scoped to the selected Mode (see CONTEXT.md).
@@ -129,15 +124,11 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
   ];
 
   return (
-    <div className="relative min-h-screen bg-neutral-950 text-neutral-100">
-      <div className="mx-auto max-w-3xl px-6 py-8">
+    <div className={ui.page}>
+      <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
         <div className="flex items-center justify-between gap-4">
-          <Link
-            to="/problems"
-            search={search}
-            className="text-sm text-neutral-400 hover:text-neutral-200"
-          >
-            ← Back to the library
+          <Link to="/problems" search={search} className={ui.backLink}>
+            Library /
           </Link>
           <div className="flex items-center gap-2">
             <div className="hidden items-center gap-2 md:flex">
@@ -153,63 +144,68 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
               ))}
             </div>
             <HeaderMenu items={actions} className="md:hidden" />
-            <span className="mx-1 h-6 w-px bg-neutral-700" aria-hidden="true" />
+            <span className="mx-1 h-6 w-0.5 bg-cobalt-700" aria-hidden="true" />
             <AccountControl />
           </div>
         </div>
 
-        <header className="mt-4 mb-8">
-          <h1 className="text-2xl font-semibold">{problem.title}</h1>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-            <span className={`uppercase ${DIFFICULTY_COLOR[problem.difficulty]}`}>
-              {problem.difficulty}
-            </span>
-            {problem.origin === "custom" && (
-              <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-neutral-400">Custom</span>
-            )}
-            {problem.tags.map((tag) => (
-              <span key={tag} className="rounded bg-neutral-800 px-1.5 py-0.5 text-neutral-400">
-                {tag}
+        <header className="mt-6 mb-10 grid grid-cols-[8px_minmax(0,1fr)] gap-4">
+          <div className={DIFFICULTY_FILL[problem.difficulty]} aria-hidden="true" />
+          <div>
+            <h1 className="font-display text-5xl leading-[0.95] font-black sm:text-6xl">
+              {problem.title}
+            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-cobalt-300">
+              <span className={`font-semibold capitalize ${DIFFICULTY_COLOR[problem.difficulty]}`}>
+                {problem.difficulty}
               </span>
-            ))}
+              {problem.origin === "custom" && (
+                <span className="rounded-full bg-cobalt-700 px-2 py-0.5 text-xs font-medium text-cobalt-200">
+                  Custom
+                </span>
+              )}
+              {problem.tags.map((tag) => (
+                <span key={tag}>{tag}</span>
+              ))}
+              {problem.url !== undefined && (
+                <a
+                  href={problem.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-pink hover:text-pink-light"
+                >
+                  View problem source ↗
+                </a>
+              )}
+            </div>
           </div>
-          {problem.url !== undefined && (
-            <a
-              href={problem.url}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 inline-block text-sm text-emerald-400 hover:text-emerald-300"
-            >
-              View problem source ↗
-            </a>
-          )}
         </header>
 
-        {actionError !== null && <p className="mb-6 text-sm text-rose-400">{actionError}</p>}
+        {actionError !== null && <p className={`mb-6 ${ui.errorText}`}>{actionError}</p>}
 
         {problem.statement !== undefined && (
-          <section className="mb-8">
-            <h2 className={sectionHeading}>Description</h2>
+          <section className="mb-10">
+            <h2 className={`mb-3 ${ui.sectionHeading}`}>Description</h2>
             <Markdown source={problem.statement} />
           </section>
         )}
 
         {(problem.expectedTime !== undefined || problem.expectedSpace !== undefined) && (
-          <section className="mb-8">
-            <h2 className={sectionHeading}>Requirements</h2>
+          <section className="mb-10">
+            <h2 className={`mb-3 ${ui.sectionHeading}`}>Requirements</h2>
             {/* Problem-level *targets* the solver should aim for — distinct from
                 each Approach's measured complexity shown below. */}
             <div className="flex flex-wrap gap-2 text-sm">
               {problem.expectedTime !== undefined && (
-                <span className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5">
-                  <span className="text-neutral-500">Target time </span>
-                  <span className="font-mono text-neutral-200">{problem.expectedTime}</span>
+                <span className="rounded-full border-2 border-cobalt-600 px-3.5 py-1">
+                  <span className="text-cobalt-300">Target time </span>
+                  <span className="font-mono text-paper">{problem.expectedTime}</span>
                 </span>
               )}
               {problem.expectedSpace !== undefined && (
-                <span className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5">
-                  <span className="text-neutral-500">Target space </span>
-                  <span className="font-mono text-neutral-200">{problem.expectedSpace}</span>
+                <span className="rounded-full border-2 border-cobalt-600 px-3.5 py-1">
+                  <span className="text-cobalt-300">Target space </span>
+                  <span className="font-mono text-paper">{problem.expectedSpace}</span>
                 </span>
               )}
             </div>
@@ -217,36 +213,31 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
         )}
 
         {problem.examples !== undefined && problem.examples.length > 0 && (
-          <section className="mb-8">
-            <h2 className={sectionHeading}>Examples</h2>
+          <section className="mb-10">
+            <h2 className={`mb-3 ${ui.sectionHeading}`}>Examples</h2>
             <div className="flex flex-col gap-3">
               {problem.examples.map((example, index) => (
-                <div
-                  key={index}
-                  className="rounded-xl border border-neutral-800 bg-neutral-900 p-4"
-                >
-                  <div className="mb-2 text-xs font-medium text-neutral-400">
+                <div key={index} className="rounded-xl bg-cobalt-850 p-4">
+                  <div className="mb-2 text-xs font-semibold text-cobalt-300">
                     Example {index + 1}
                   </div>
                   <dl className="flex flex-col gap-2 text-sm">
                     <div>
-                      <dt className="text-xs uppercase tracking-wide text-neutral-500">Input</dt>
-                      <dd className="mt-1 overflow-auto whitespace-pre-wrap font-mono text-neutral-200">
+                      <dt className="text-xs text-cobalt-400">Input</dt>
+                      <dd className="mt-0.5 overflow-auto font-mono whitespace-pre-wrap text-paper">
                         {example.input}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-xs uppercase tracking-wide text-neutral-500">Output</dt>
-                      <dd className="mt-1 overflow-auto whitespace-pre-wrap font-mono text-neutral-200">
+                      <dt className="text-xs text-cobalt-400">Output</dt>
+                      <dd className="mt-0.5 overflow-auto font-mono whitespace-pre-wrap text-mint">
                         {example.output}
                       </dd>
                     </div>
                     {example.explanation !== undefined && (
                       <div>
-                        <dt className="text-xs uppercase tracking-wide text-neutral-500">
-                          Explanation
-                        </dt>
-                        <dd className="mt-1 text-neutral-400">{example.explanation}</dd>
+                        <dt className="text-xs text-cobalt-400">Explanation</dt>
+                        <dd className="mt-0.5 text-cobalt-200">{example.explanation}</dd>
                       </div>
                     )}
                   </dl>
@@ -256,93 +247,103 @@ export function ProblemDetail({ problem }: { problem: Problem }) {
           </section>
         )}
 
-        <section className="mb-8">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className={inlineSectionHeading}>Approaches</h2>
+        <section className="mb-10">
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h2 className={ui.sectionHeading}>Approaches</h2>
             {session !== null && (
               <button
                 type="button"
                 onClick={() => void loadBestScores().catch(() => {})}
-                className="text-xs text-neutral-500 hover:text-neutral-200"
+                className={ui.textButton}
               >
                 Refresh PBs
               </button>
             )}
           </div>
           {session !== null && historyStatus === "error" && (
-            <p className="mb-3 text-sm text-rose-400">
+            <p className={`mb-3 ${ui.errorText}`}>
               {historyError ?? "Could not load Personal Bests."}
             </p>
           )}
-          <div className="flex flex-col gap-2">
+          <ul className="border-b border-cobalt-700">
             {problem.solutions.map((solution) => {
               const best = bestFor(scopedBestScores, problem.id, solution.id, mode);
               const complexity = complexityLabel(solution);
+              const pbPending = sessionPending || (session !== null && historyStatus !== "ready");
               return (
-                <Link
-                  key={solution.id}
-                  to="/problems/$problemId/$solutionId"
-                  params={{ problemId: problem.id, solutionId: solution.id }}
-                  search={search}
-                  className="group flex items-center justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 hover:border-emerald-500"
-                >
-                  <div className="min-w-0">
-                    <div className="font-medium text-neutral-100 group-hover:text-white">
-                      {solution.approach}
+                <li key={solution.id} className="border-t border-cobalt-700">
+                  <Link
+                    to="/problems/$problemId/$solutionId"
+                    params={{ problemId: problem.id, solutionId: solution.id }}
+                    search={search}
+                    className="flex items-center justify-between gap-4 px-2 py-3 transition-colors duration-100 hover:bg-pink/10"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-display text-2xl leading-tight font-extrabold">
+                        {solution.approach}
+                      </div>
+                      {complexity !== null && (
+                        <div className="mt-0.5 text-xs text-cobalt-300">{complexity}</div>
+                      )}
                     </div>
-                    {complexity !== null && (
-                      <div className="mt-0.5 text-xs text-neutral-500">{complexity}</div>
-                    )}
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className="text-xs text-neutral-500">{MODE_LABEL[mode]} PB</div>
-                    <div className="tabular-nums text-neutral-200">
-                      {sessionPending || (session !== null && historyStatus !== "ready")
-                        ? "…"
-                        : session === null
-                          ? "Sign in"
-                          : best !== undefined
-                            ? `${Math.round(best.bestCpm)} CPM`
-                            : "—"}
+                    <div className="shrink-0 text-right">
+                      {pbPending ? (
+                        <div className="font-display text-2xl text-cobalt-600">…</div>
+                      ) : session === null ? (
+                        <div className="text-xs text-cobalt-400">Sign in to track PBs</div>
+                      ) : best !== undefined ? (
+                        <>
+                          <div className="font-display text-3xl leading-none font-black text-lemon tabular-nums">
+                            {Math.round(best.bestCpm)}
+                          </div>
+                          <div className="text-xs text-cobalt-300">
+                            {MODE_LABEL[mode]} best, cpm
+                          </div>
+                        </>
+                      ) : (
+                        <div className="font-display text-lg font-semibold text-cobalt-600">
+                          Not played
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </Link>
+                  </Link>
+                </li>
               );
             })}
-          </div>
+          </ul>
         </section>
 
         <section>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className={inlineSectionHeading}>Recent attempts</h2>
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h2 className={ui.sectionHeading}>Recent attempts</h2>
             {session !== null && (
               <button
                 type="button"
                 onClick={() => void loadProblemAttempts()}
-                className="text-xs text-neutral-500 hover:text-neutral-200"
+                className={ui.textButton}
               >
                 Refresh
               </button>
             )}
           </div>
           {sessionPending || attemptStatus === "idle" || attemptStatus === "loading" ? (
-            <p className="text-sm text-neutral-500">Loading Attempts…</p>
+            <p className={ui.mutedText}>Loading Attempts…</p>
           ) : session === null ? (
-            <p className="text-sm text-neutral-500">Sign in to view account-backed history.</p>
+            <p className={ui.mutedText}>Sign in to keep a history of your Attempts.</p>
           ) : attemptStatus === "error" ? (
-            <div className="flex items-center gap-3 text-sm">
-              <p className="text-rose-400">{attemptError ?? "Could not load Attempt history."}</p>
+            <div className="flex items-center gap-3">
+              <p className={ui.errorText}>{attemptError ?? "Could not load Attempt history."}</p>
               <button
                 type="button"
                 onClick={() => void loadProblemAttempts()}
-                className="rounded border border-neutral-700 px-2 py-1 text-neutral-300 hover:border-neutral-500"
+                className={ui.secondaryButton}
               >
                 Retry
               </button>
             </div>
           ) : attempts.length === 0 ? (
-            <p className="text-sm text-neutral-500">
-              No attempts yet — pick an approach above to start a session.
+            <p className={ui.mutedText}>
+              No attempts yet. Pick an approach above to start a Session.
             </p>
           ) : (
             <RecentAttempts attempts={attempts} />

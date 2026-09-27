@@ -15,6 +15,7 @@ import { DIFFICULTIES as PROBLEM_DIFFICULTIES } from "@shared/domain/problem";
 import type { Problem } from "@shared/domain/problem";
 import { HeaderMenu } from "./HeaderMenu";
 import type { HeaderMenuItem } from "./HeaderMenu";
+import { secondaryButton } from "./styles";
 
 const DIFFICULTIES: DifficultyFilter[] = ["all", ...PROBLEM_DIFFICULTIES];
 
@@ -25,8 +26,6 @@ function actionClass(variant: HeaderMenuItem["variant"]): string {
     : secondaryButton;
 }
 
-const secondaryButton =
-  "rounded-full border-2 border-cobalt-600 px-3.5 py-1.5 text-sm font-semibold text-cobalt-200 hover:border-cobalt-300 hover:text-paper";
 const restoreButton =
   "rounded-full border-2 border-mint px-3 py-1 text-sm font-semibold text-mint hover:bg-mint hover:text-mint-ink";
 

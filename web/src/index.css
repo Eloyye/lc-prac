@@ -46,6 +46,18 @@ body {
   font-family: var(--font-sans);
 }
 
+* {
+  scrollbar-color: var(--color-cobalt-600) transparent;
+}
+
+/* JetBrains Mono ships ligatures (-> becomes an arrow, == one glyph). Users
+   must see the exact characters they will retype, so show code literally. */
+.font-mono,
+code,
+pre {
+  font-variant-ligatures: none;
+}
+
 :focus-visible {
   outline: 2px solid var(--color-lemon);
   outline-offset: 2px;
@@ -100,7 +112,7 @@ body {
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgb(0 0 0 / 70%);
+  background: rgb(15 18 80 / 80%);
   backdrop-filter: blur(4px);
 }
 
@@ -112,28 +124,29 @@ body {
   width: min(36rem, calc(100vw - 2rem));
   transform: translateX(-50%);
   overflow: hidden;
-  border: 1px solid #404040;
-  border-radius: 0.75rem;
-  background: #171717;
-  color: #f5f5f5;
-  box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
+  border: 2px solid var(--color-cobalt-600);
+  border-radius: 1rem;
+  background: var(--color-cobalt-800);
+  color: var(--color-paper);
+  box-shadow: 0 24px 80px var(--color-cobalt-950);
 }
 
 .command-input {
   width: 100%;
   border: 0;
-  border-bottom: 1px solid #404040;
+  border-bottom: 2px solid var(--color-cobalt-600);
   background: transparent;
-  padding: 1rem;
+  padding: 1rem 1.125rem;
   color: inherit;
-  font-size: 0.95rem;
+  font-size: 1rem;
+  font-weight: 500;
   outline: none;
 }
 
 .command-input::placeholder,
 .command-empty,
 .command-hint {
-  color: #737373;
+  color: var(--color-cobalt-400);
 }
 
 .command-list {
@@ -149,12 +162,11 @@ body {
 }
 
 .command-group [cmdk-group-heading] {
-  padding: 0.5rem 0.625rem 0.25rem;
-  color: #737373;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  padding: 0.625rem 0.625rem 0.25rem;
+  color: var(--color-cobalt-300);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
 }
 
 .command-item {
@@ -166,16 +178,21 @@ body {
   border-radius: 0.5rem;
   padding: 0.625rem;
   font-size: 0.875rem;
+  font-weight: 500;
   outline: none;
 }
 
 .command-item[data-selected="true"] {
-  background: #262626;
-  color: white;
+  background: var(--color-pink);
+  color: var(--color-pink-ink);
+}
+
+.command-item[data-selected="true"] .command-hint {
+  color: var(--color-pink-ink);
 }
 
 .command-separator {
   height: 1px;
   margin: 0.5rem;
-  background: #262626;
+  background: var(--color-cobalt-700);
 }

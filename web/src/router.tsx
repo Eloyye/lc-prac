@@ -106,10 +106,16 @@ function RootLayout() {
 
 function NotFound() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-neutral-950 text-neutral-100">
-      <p className="text-lg font-medium">That problem could not be found.</p>
-      <Link to="/problems" className="text-emerald-400 hover:text-emerald-300">
-        ← Back to the library
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-cobalt-900 px-4 text-center text-paper">
+      <p className="font-display text-5xl font-black">Problem not found</p>
+      <p className="text-sm text-cobalt-300">
+        It may have been archived, hidden, or never existed in your Library.
+      </p>
+      <Link
+        to="/problems"
+        className="rounded-full bg-pink px-4 py-2 text-sm font-bold text-pink-ink hover:bg-pink-light"
+      >
+        Back to the Library
       </Link>
     </div>
   );
