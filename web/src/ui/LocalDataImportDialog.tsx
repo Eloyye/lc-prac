@@ -6,6 +6,7 @@ import type {
 } from "@shared/api/local-data-import";
 import type { LocalDataSnapshot } from "../persistence/storage";
 import { useLocalDataImport } from "../store/local-data-import";
+import * as ui from "./styles";
 
 interface LocalDataImportDialogProps {
   onResolved: () => Promise<void>;
@@ -34,23 +35,25 @@ function snapshotCounts(snapshot: LocalDataSnapshot): LocalDataImportCounts {
 export function LocalDataImportReportDetails({ report }: { report: LocalDataImportReport }) {
   return (
     <>
-      <p className="mt-3 text-sm text-neutral-300">
+      <p className="mt-3 text-sm text-cobalt-200">
         {report.decision === "skipped"
           ? "Local data was skipped. This account will continue with its server data."
           : "The server is now authoritative for this signed-in account."}
       </p>
       {report.decision === "imported" && (
-        <ul className="mt-4 space-y-1 text-sm text-neutral-300">
+        <ul className="mt-4 space-y-1 text-sm text-cobalt-200">
           {COLLECTIONS.map((collection) => (
             <li key={collection} className="flex justify-between gap-4">
               <span>{LABELS[collection]}</span>
-              <span>{report.imported[collection]} imported</span>
+              <span className="font-semibold text-paper tabular-nums">
+                {report.imported[collection]} imported
+              </span>
             </li>
           ))}
         </ul>
       )}
       {report.skipped.length > 0 && (
-        <div className="mt-4 max-h-36 overflow-auto rounded-lg bg-neutral-950 p-3 text-xs text-amber-200">
+        <div className="mt-4 max-h-36 overflow-auto rounded-lg bg-cobalt-950 p-3 text-xs text-lemon">
           <p className="mb-2 font-medium">Skipped records ({report.skipped.length})</p>
           {report.skipped.map((record, index) => (
             <p key={`${record.collection}:${record.id}:${index}`}>
@@ -93,31 +96,33 @@ export function LocalDataImportDialog({ onResolved }: LocalDataImportDialogProps
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+    <div className={`fixed z-[70] ${ui.overlay}`}>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="local-import-title"
-        className="w-full max-w-lg rounded-xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100 shadow-2xl"
+        className={`max-w-lg ${ui.dialogPanel}`}
       >
-        <h2 id="local-import-title" className="text-lg font-semibold">
+        <h2 id="local-import-title" className={ui.dialogTitle}>
           {status === "result" ? "Local data Import complete" : "Import local data?"}
         </h2>
 
         {status === "checking" && (
-          <p className="mt-3 text-sm text-neutral-400">Checking this account’s Import status…</p>
+          <p className="mt-3 text-sm text-cobalt-300">Checking this account’s Import status…</p>
         )}
 
         {status === "prompt" && counts !== null && (
           <>
-            <p className="mt-3 text-sm text-neutral-300">
+            <p className="mt-3 text-sm text-cobalt-200">
               This browser has practice data from before sign-in. Import it into this account, or
               skip it explicitly. Existing server records with the same ids will be kept.
             </p>
-            <ul className="mt-4 grid grid-cols-2 gap-2 text-sm text-neutral-300">
+            <ul className="mt-4 grid grid-cols-2 gap-2 text-sm text-cobalt-200">
               {COLLECTIONS.filter((collection) => counts[collection] > 0).map((collection) => (
-                <li key={collection} className="rounded-lg bg-neutral-800 px-3 py-2">
-                  <span className="font-medium text-white">{counts[collection]}</span>{" "}
+                <li key={collection} className="rounded-xl bg-cobalt-850 px-3 py-2">
+                  <span className="font-display text-2xl font-extrabold text-paper">
+                    {counts[collection]}
+                  </span>{" "}
                   {LABELS[collection]}
                 </li>
               ))}
@@ -126,14 +131,14 @@ export function LocalDataImportDialog({ onResolved }: LocalDataImportDialogProps
               <button
                 type="button"
                 onClick={() => void useLocalDataImport.getState().submitSkip()}
-                className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-800"
+                className={ui.secondaryButton}
               >
                 Skip local data
               </button>
               <button
                 type="button"
                 onClick={() => void useLocalDataImport.getState().submitImport()}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500"
+                className={ui.primaryButton}
               >
                 Import into account
               </button>
@@ -142,27 +147,23 @@ export function LocalDataImportDialog({ onResolved }: LocalDataImportDialogProps
         )}
 
         {status === "submitting" && (
-          <p className="mt-3 text-sm text-neutral-400">Saving the account decision…</p>
+          <p className="mt-3 text-sm text-cobalt-300">Saving the account decision…</p>
         )}
 
         {status === "error" && (
           <>
-            <p className="mt-3 text-sm text-rose-300">{error}</p>
+            <p className={`mt-3 ${ui.errorText}`}>{error}</p>
             <div className="mt-5 flex justify-end gap-2">
               {failedAction !== "check" && (
                 <button
                   type="button"
                   onClick={() => useLocalDataImport.getState().backToPrompt()}
-                  className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-800"
+                  className={ui.secondaryButton}
                 >
                   Back
                 </button>
               )}
-              <button
-                type="button"
-                onClick={retry}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500"
-              >
+              <button type="button" onClick={retry} className={ui.primaryButton}>
                 Try again
               </button>
             </div>
@@ -183,7 +184,7 @@ export function LocalDataImportDialog({ onResolved }: LocalDataImportDialogProps
                     setContinuing(false);
                   });
                 }}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
+                className={ui.primaryButton}
               >
                 {continuing ? "Loading account…" : "Continue"}
               </button>

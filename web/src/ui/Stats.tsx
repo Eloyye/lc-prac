@@ -5,6 +5,7 @@ import { authClient } from "../api/auth";
 import { getStatsSummary } from "../api/stats";
 import { AccountControl } from "./AccountControl";
 import { StatsSummaryView } from "./StatsSummaryView";
+import * as ui from "./styles";
 
 export function Stats() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
@@ -41,25 +42,25 @@ export function Stats() {
   }, [load, sessionPending]);
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100">
-      <div className="mx-auto max-w-3xl px-6 py-8">
+    <div className={ui.page}>
+      <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
         <div className="flex items-center justify-between gap-4">
-          <Link to="/problems" className="text-sm text-neutral-400 hover:text-neutral-200">
-            ← Back to the library
+          <Link to="/problems" className={ui.backLink}>
+            Library /
           </Link>
           <AccountControl />
         </div>
-        <header className="mt-4 mb-8 flex items-end justify-between gap-4">
+        <header className="mt-6 mb-8 flex items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold">Stats</h1>
-            <p className="mt-1 text-sm text-neutral-500">A summary of completed Sessions.</p>
+            <h1 className="font-display text-5xl leading-none font-black sm:text-6xl">Stats</h1>
+            <p className={`mt-2 ${ui.mutedText}`}>Totals across every completed Session.</p>
           </div>
           {session !== null && (
             <button
               type="button"
               onClick={() => void load()}
               disabled={status === "loading"}
-              className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-neutral-500 disabled:opacity-50"
+              className={ui.secondaryButton}
             >
               Refresh
             </button>
@@ -67,17 +68,13 @@ export function Stats() {
         </header>
 
         {sessionPending || status === "idle" || status === "loading" ? (
-          <p className="text-neutral-500">Loading Stats…</p>
+          <p className="text-cobalt-400">Loading Stats…</p>
         ) : session === null ? (
-          <p className="text-neutral-500">Sign in to view account-backed Stats.</p>
+          <p className="text-cobalt-300">Sign in to see Stats from your saved Attempts.</p>
         ) : status === "error" ? (
           <div className="flex flex-col items-start gap-3">
-            <p className="text-rose-400">{error ?? "Could not load Stats."}</p>
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-300 hover:border-neutral-500"
-            >
+            <p className={ui.errorText}>{error ?? "Could not load Stats."}</p>
+            <button type="button" onClick={() => void load()} className={ui.secondaryButton}>
               Retry
             </button>
           </div>

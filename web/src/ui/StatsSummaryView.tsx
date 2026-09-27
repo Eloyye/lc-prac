@@ -4,13 +4,13 @@ export function StatsSummaryView({ summary }: { summary: StatsSummary }) {
   return (
     <>
       {summary.totalAttempts === 0 && (
-        <p className="mb-4 text-sm text-neutral-500">
+        <p className="mb-4 text-sm text-cobalt-300">
           No completed Sessions yet. Finish one to start your Stats.
         </p>
       )}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-cobalt-700 lg:grid-cols-4">
         <Stat label="Attempts" value={summary.totalAttempts.toString()} />
-        <Stat label="Best CPM" value={Math.round(summary.bestCpm).toString()} />
+        <Stat label="Best CPM" value={Math.round(summary.bestCpm).toString()} score />
         <Stat label="Average accuracy" value={`${Math.round(summary.averageAccuracyPct)}%`} />
         <Stat
           label="Practice time"
@@ -21,11 +21,15 @@ export function StatsSummaryView({ summary }: { summary: StatsSummary }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, score = false }: { label: string; value: string; score?: boolean }) {
   return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-      <div className="text-xs uppercase tracking-wide text-neutral-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
+    <div className="bg-cobalt-850 p-4">
+      <div
+        className={`font-display text-4xl leading-none font-black tabular-nums sm:text-5xl ${score ? "text-lemon" : "text-paper"}`}
+      >
+        {value}
+      </div>
+      <div className="mt-1.5 text-xs font-medium text-cobalt-300">{label}</div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { usePreferences } from "../store/preferences";
 import type { Mode } from "@shared/domain/mode";
+import * as ui from "./styles";
 
 const MODES: Array<{ value: Mode; label: string; detail: string }> = [
   { value: "copy", label: "Copy", detail: "Keep the Reference visible" },
@@ -30,7 +31,7 @@ export function SettingsDialog() {
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className={`fixed z-50 ${ui.overlay}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) close();
       }}
@@ -41,21 +42,19 @@ export function SettingsDialog() {
         aria-modal="true"
         aria-labelledby="settings-title"
         tabIndex={-1}
-        className="w-full max-w-md rounded-xl border border-neutral-700 bg-neutral-900 p-6 shadow-2xl outline-none"
+        className={`max-w-md ${ui.dialogPanel}`}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h2 id="settings-title" className="text-lg font-semibold text-neutral-100">
+          <h2 id="settings-title" className={ui.dialogTitle}>
             Settings
           </h2>
-          <button type="button" onClick={close} className="text-neutral-500 hover:text-white">
+          <button type="button" onClick={close} className={ui.closeButton}>
             Close
           </button>
         </div>
 
         <fieldset>
-          <legend className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
-            Default mode
-          </legend>
+          <legend className={`mb-2 ${ui.fieldLabel}`}>Default mode</legend>
           <div className="flex flex-col gap-2">
             {MODES.map((option) => (
               <button
@@ -66,23 +65,27 @@ export function SettingsDialog() {
                   setMode(option.value);
                   close();
                 }}
-                className={`rounded-lg border px-3 py-2 text-left ${
+                className={`rounded-xl border-2 px-3.5 py-2.5 text-left ${
                   mode === option.value
-                    ? "border-emerald-600 bg-emerald-950/50"
-                    : "border-neutral-700 hover:border-neutral-500"
+                    ? "border-pink bg-pink/15"
+                    : "border-cobalt-600 hover:border-cobalt-300"
                 }`}
               >
-                <span className="block text-sm font-medium text-neutral-100">{option.label}</span>
-                <span className="block text-xs text-neutral-500">{option.detail}</span>
+                <span className="block font-display text-xl leading-tight font-extrabold">
+                  {option.label}
+                </span>
+                <span className="block text-xs text-cobalt-300">{option.detail}</span>
               </button>
             ))}
           </div>
         </fieldset>
 
-        <label className="mt-5 flex items-center justify-between gap-4 rounded-lg border border-neutral-700 px-3 py-3">
+        <label className="mt-5 flex cursor-pointer items-center justify-between gap-4 rounded-xl border-2 border-cobalt-600 px-3.5 py-3 hover:border-cobalt-300">
           <span>
-            <span className="block text-sm font-medium text-neutral-100">Distraction-free</span>
-            <span className="block text-xs text-neutral-500">
+            <span className="block font-display text-xl leading-tight font-extrabold">
+              Distraction-free
+            </span>
+            <span className="block text-xs text-cobalt-300">
               Silence completion, hints, and diagnostics
             </span>
           </span>
@@ -90,7 +93,7 @@ export function SettingsDialog() {
             type="checkbox"
             checked={distractionFree}
             onChange={(event) => setDistractionFree(event.target.checked)}
-            className="size-4 accent-emerald-500"
+            className="size-5 accent-pink"
           />
         </label>
       </div>
